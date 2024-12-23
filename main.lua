@@ -45,9 +45,10 @@ local Abilities = {
   [9] = "stun",
   [10] = "pull",
 }
-local Assets = {
+local Images = {
   ["bin"] = "bin.png",
   ["love"] = "love.png",
+  ["broken"] = "broken.png"
 }
 local GameUI = {
   "spells",
@@ -65,12 +66,16 @@ local DEFAULT_WORLD = {
   objects = { {
     sprite = "bin",
     x = 200,
-    y = 200
+    y = 200,
+    w = 100,
+    h = 100
   },
   {
     sprite = "love",
     x = 1000,
     y = 1000,
+    w = 100,
+    h = 100
   }
  }
 }
@@ -103,7 +108,7 @@ local n_logs = nil
 local log_file = nil
 
 ----> Assets
-local loaded_assets = nil
+local loaded_images = nil
 
 ----> Menu
 
@@ -278,12 +283,26 @@ end
 --> ASSETS
 ----> Initialise
 function assets_init()
-  loaded_assets = {}
-  for name,path in pairs(Assets) do
-    local ext = string.match(path,".([a-zA-Z0-9]+)$")
-    if ext == "png" then
-      loaded_assets[name] = love.graphics.newImage(path)
-    end
+  loaded_images = {}
+  for name,path in pairs(Images) do
+    local image = love.graphics.newImage(path)
+    local width = image:getWidth()
+    local height = image:getHeight()
+    loaded_images[name] = {
+      img = image,
+      w = width,
+      h = height,
+    }
+  end
+end
+
+----> Get an image asset
+function get_image(name)
+  local img = loaded_images[name]
+  if img == nil then
+    return loaded_images["broken"]
+  else
+    return img
   end
 end
 
@@ -363,8 +382,11 @@ function world_draw()
   local objs = world.objects
   for _,o in pairs(objs) do
     local pos = world_to_screen(o.x,o.y)
+    local img = get_image(o.sprite)
+    local xscale = o.w / img.w
+    local yscale = o.h / img.h
     love.graphics.setColor(1,1,1)
-    love.graphics.draw(loaded_assets[o.sprite], pos.x,pos.y)
+    love.graphics.draw(img.img, pos.x,pos.y,0,xscale,yscale)
   end
 end
 
@@ -413,7 +435,9 @@ function world_load(world_deets)
       table.insert(new_world_objs,{
         sprite = o.sprite,
         x = o.x,
-        y = o.y
+        y = o.y,
+        w = o.w,
+        h = o.h
       })
     end
   end
