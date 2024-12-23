@@ -1,6 +1,6 @@
 --> CONSTANTS
 ----> Util
-color = {
+local Color = {
   ["red"] = { 1, 0, 0 },
   ["green"] = { 0, 1, 0 },
   ["blue"] = { 0, 0, 1 },
@@ -45,6 +45,10 @@ local Abilities = {
   [9] = "stun",
   [10] = "pull",
 }
+local Assets = {
+  ["bin"] = "bin.png",
+  ["love"] = "love.png",
+}
 local GameUI = {
   "spells",
 }
@@ -54,13 +58,38 @@ local Spells = {
   ITEM_WIDTH = 60,
   DIVISION = 10,
 }
-local default_world = {
+local DEFAULT_WORLD = {
   boundaries = { x1 = -10000, x2 = 10000, y1 = -10000, y2 = 10000 },
   spawn = {x = 0, y = 0 },
   background = "tiles white green 200 200",
+  objects = { {
+    sprite = "bin",
+    x = 200,
+    y = 200
+  },
+  {
+    sprite = "love",
+    x = 1000,
+    y = 1000,
+  }
+ }
 }
-local default_username = "jason"
-local move_delay_s = 0.1
+local DEFAULT_PLAYER = {
+  abilities = {
+    [1] = "invis",
+    [2] = "beam",
+    [3] = "cantrip",
+    [4] = "root",
+    [5] = "negate",
+    [6] = "push",
+    [7] = "rage",
+    [8] = "reflect",
+    [9] = "stun",
+    [10] = "pull"
+  }
+}
+local DEFAULT_USERNAME = "jason"
+local MOVE_DELAY_S = 0.1
 
 --> VARIABLES
 ----> State
@@ -69,10 +98,12 @@ local debug = nil
 local paused = nil
 
 ----> Debug
-local recent_ability = nil
-local dbg_tick = nil
 local log_ledger = nil
 local n_logs = nil
+local log_file = nil
+
+----> Assets
+local loaded_assets = nil
 
 ----> Menu
 
@@ -82,7 +113,6 @@ local world_dbg_tick = nil
 
 ----> Game
 local ability_index_map = nil
-local ability_map = nil
 local game_keyhandlers = nil
 local clicking = nil
 local last_move_s = nil
@@ -119,9 +149,17 @@ end
 --> DEBUG
 ----> Initialise
 function debug_init()
-  recent_ability = nil
   log_ledger = {}
   n_logs = 0
+  love.filesystem.createDirectory("logs")
+  local log_filename = "logs/" .. os.date("%Y%m%d%H%M%S") .. ".txt"
+  log_file = love.filesystem.newFile(log_filename)
+  log_file:open("w")
+end
+
+----> Log to text
+function log_text(log)
+  return log.logtype .. " - " .. log.datetime .. ": " .. log.message
 end
 
 ----> Draw
@@ -147,7 +185,6 @@ function debug_draw()
   end
   
   -- Logs
-
   local y = h - 2 * lh
   local n = 10
   local li = n_logs
@@ -159,7 +196,7 @@ function debug_draw()
     end
     
     local log = log_ledger[li]
-    local logtext = log.logtype .. " - " .. log.datetime .. ": " .. log.message
+    local logtext = log_text(log)
     
     local ltwidth, wrappedtext = f:getWrap(logtext,w - f:getWidth("\t"))
     local reversed_lines = {}
@@ -186,32 +223,44 @@ end
 
 ----> Log information
 function log_info(message)
-  table.insert(log_ledger,{
+  local new_log = {
     logtype = "info",
     datetime = os.date("%Y-%m-%d %H:%M:%S"),
     message = message
-  })
+  }
+  
+  table.insert(log_ledger,new_log)
   n_logs = n_logs + 1
+  log_file:write(log_text(new_log) .. "\r\n")
+  log_file:flush()
 end
 
 ----> Log warning
 function log_warning(message)
-  table.insert(log_ledger,{
+  local new_log = {
     logtype = "warn",
     datetime = os.date("%Y-%m-%d %H:%M:%S"),
     message = message
-  })
+  }
+  
+  table.insert(log_ledger,new_log)
   n_logs = n_logs + 1
+  log_file:write(log_text(new_log) .. "\r\n")
+  log_file:flush()
 end
 
 ----> Log error
 function log_error(message)
-  table.insert(log_ledger,{
+  local new_log = {
     logtype = "err",
     datetime = os.date("%Y-%m-%d %H:%M:%S"),
     message = message
-  })
+  }
+  
+  table.insert(log_ledger,new_log)
   n_logs = n_logs + 1
+  log_file:write(log_text(new_log) .. "\r\n")
+  log_file:flush()
 end
 
 ----> Capturing debug handler
@@ -224,6 +273,18 @@ end
 ----> Capturing debug mous handler
 function debug_mousehandler(x,y,button,pressed)
   
+end
+
+--> ASSETS
+----> Initialise
+function assets_init()
+  loaded_assets = {}
+  for name,path in pairs(Assets) do
+    local ext = string.match(path,".([a-zA-Z0-9]+)$")
+    if ext == "png" then
+      loaded_assets[name] = love.graphics.newImage(path)
+    end
+  end
 end
 
 --> MENU
@@ -277,9 +338,9 @@ function draw_background(bg,sc)
         
         local col = nil
         if (i + j) % 2 == 0 then
-          col = color[col1]
+          col = Color[col1]
         else
-          col = color[col2]
+          col = Color[col2]
         end
         
         love.graphics.setColor(col)
@@ -291,12 +352,19 @@ end
 
 ----> Draw
 function world_draw()
-  local player_pos = world.players[default_username].pos
+  local player_pos = world.players[DEFAULT_USERNAME].pos
   local sc = screen_coords(player_pos.x,player_pos.y)
   local bg = world.deets.background
   
   if bg ~= nil then
     draw_background(bg,sc)
+  end
+
+  local objs = world.objects
+  for _,o in pairs(objs) do
+    local pos = world_to_screen(o.x,o.y)
+    love.graphics.setColor(1,1,1)
+    love.graphics.draw(loaded_assets[o.sprite], pos.x,pos.y)
   end
 end
 
@@ -310,6 +378,16 @@ function update_player(player)
     y = pos.y + (target.y - pos.y) / 10,
   }
   game_dbg_pos = player.pos
+end
+
+function use_ability(username,ability_num)
+  if world ~= nil and world.players[username] ~= nil then
+    player = world.players[username]
+    
+    local ability_name = player.abilities[ability_num]
+    local ability_index = ability_index_map[ability_name]
+    log_info(username .. " used ability: " .. ability_name)
+  end
 end
 
 ----> Update
@@ -328,12 +406,24 @@ end
 ----> Load world
 function world_load(world_deets)
   log_info("Loading a new world.")
+
+  local new_world_objs = {}
+  if world_deets.objects ~= nil then
+    for _,o in pairs(world_deets.objects) do
+      table.insert(new_world_objs,{
+        sprite = o.sprite,
+        x = o.x,
+        y = o.y
+      })
+    end
+  end
   
   local new_world = {
     tick = 0,
     deets = world_deets,
     players = {},
-    mobs = {}
+    mobs = {},
+    objects = new_world_objs
   }
   
   world = new_world
@@ -344,11 +434,13 @@ function world_join(username)
   log_info(username .. " joined!")
   
   local spawn = world.deets.spawn
-  
-  world.players[username] = {
+  local new_player = {
+    abilities = DEFAULT_PLAYER.abilities,
     pos = { x = spawn.x, y = spawn.y },
     target = { x = spawn.x, y = spawn.y },
   }
+  
+  world.players[username] = new_player
 end
 
 ----> Set move target
@@ -362,17 +454,31 @@ function set_target(username,x,y)
 end
 
 ----> Convert screen to world
-function world_pos(x,y)
-  if world == nil or world.players[default_username] == nil then
+function screen_to_world(x,y)
+  if world == nil or world.players[DEFAULT_USERNAME] == nil then
     return nil
   end
   
-  local player_pos = world.players[default_username].pos
+  local player_pos = world.players[DEFAULT_USERNAME].pos
   local sc = screen_coords(player_pos.x,player_pos.y)
   
   return {
     x = x + sc.x1,
     y = y + sc.y1,
+  }
+end
+
+function world_to_screen(x,y)
+  if world == nil or world.players[DEFAULT_USERNAME] == nil then
+    return nil
+  end
+  
+  local player_pos = world.players[DEFAULT_USERNAME].pos
+  local sc = screen_coords(player_pos.x,player_pos.y)
+  
+  return {
+    x = x - sc.x1,
+    y = y - sc.y1,
   }
 end
 
@@ -384,7 +490,6 @@ function game_init()
   for k,v in pairs(Abilities) do
     ability_index_map[v] = k
   end
-  ability_map = {}
   clicking = false
   last_move_s = love.timer.getTime()
   game_dbg_pos = nil
@@ -393,20 +498,20 @@ end
 ----> Move
 function move_char()
   local mx, my = love.mouse.getPosition()  
-  local new_pos = world_pos(mx,my)
+  local new_pos = screen_to_world(mx,my)
       
-  set_target(default_username,new_pos.x,new_pos.y)
+  set_target(DEFAULT_USERNAME,new_pos.x,new_pos.y)
 end
 
 ----> Update
 function game_update()
   local t = love.timer.getTime()
   if world == nil then
-    world_load(default_world)
-    world_join(default_username)
+    world_load(DEFAULT_WORLD)
+    world_join(DEFAULT_USERNAME)
   end
   
-  if clicking and t - last_move_s > move_delay_s then
+  if clicking and t - last_move_s > MOVE_DELAY_S then
     move_char()
     last_move_s = t
   end
@@ -414,10 +519,84 @@ function game_update()
   world_update()
 end
 
+function game_mousehandler_abilities(x,y,button,pressed)
+  if pressed and button == 1 then
+    local w = love.graphics.getWidth()
+    local h = love.graphics.getHeight()
+    
+    local l = 50
+    local m = l / 10
+    
+    local xm = 5
+    local ym = 5
+    
+    local yp = h - y - ym
+    local xp = x - xm
+    
+    local yi = math.floor(yp / (l + m)) + 1
+    local xi = math.floor(xp / (l + m)) + 1
+    
+    local yr = yp % (l + m)
+    local xr = xp % (l + m)
+    
+    if 1 <= yi and yi <= 2 and 1 <= xi and xi <= 5 and xr <= l and yr <= l then
+      local i = (2 - yi) * 5 + xi
+      use_ability(DEFAULT_USERNAME,i)
+      return true
+    end
+  end
+  
+  return false
+end
+
+----> Draw the abilities bar
+function game_draw_abilities()
+  local w = love.graphics.getWidth()
+  local h = love.graphics.getHeight()
+  
+  local ability_key_inv = {}
+  for key,ability_num in pairs(AbilityKey) do
+    ability_key_inv[ability_num] = key:upper()
+  end
+  
+  local l = 50
+  local m = l / 10
+  
+  local x = m
+  local y = h - m
+    
+  local i = 6
+  while i <= 10 do
+    love.graphics.setColor(Color["black"])
+    love.graphics.rectangle('fill',x,y - l,l,l)
+    
+    love.graphics.setColor(Color["white"])
+    love.graphics.print(ability_key_inv[i],x,y - l)
+    
+    x = x + m + l
+    i = i + 1
+  end
+  
+  x = m
+  y = h - l - m - m
+  i = 1
+  while i <= 5 do
+    love.graphics.setColor(Color["blue"])
+    love.graphics.rectangle('fill',x,y - l,l,l)
+    
+    love.graphics.setColor(Color["white"])
+    love.graphics.print(ability_key_inv[i],x,y - l)
+    
+    x = x + m + l
+    i = i + 1
+  end
+end
+
 ----> Draw
 function game_draw()
-  if world ~= nil and world.players[default_username] ~= nil then
+  if world ~= nil and world.players[DEFAULT_USERNAME] ~= nil then
     world_draw()
+    game_draw_abilities()
   else
     love.graphics.printf("Loading",0,0,800)
   end
@@ -434,9 +613,7 @@ end
 function ability_handler(key, pressed) 
   if pressed then
     local ability_num = AbilityKey[key]
-    local ability_name = ability_map[ability_num]
-    local ability_index = ability_index_map[ability_name]
-    recent_ability = ability_name
+    use_ability(DEFAULT_USERNAME,ability_num)
   end
 end
 
@@ -446,20 +623,6 @@ function register_key_handlers()
     game_keyhandlers[k] = ability_handler
   end
   game_keyhandlers["space"] = action_handler
-end
-
-----> Map abilities
-function map_abilities()
-  ability_map[1] = "stun"
-  ability_map[2] = "negate"
-  ability_map[3] = "reflect"
-  ability_map[4] = "root"
-  ability_map[5] = "push"
-  ability_map[6] = "beam"
-  ability_map[7] = "rage"
-  ability_map[8] = "pull"
-  ability_map[9] = "invis"
-  ability_map[10] = "cantrip"
 end
 
 ----> Key handler
@@ -472,16 +635,20 @@ end
 
 ----> Mouse handler
 function game_mousehandler(x,y,button,pressed)
+  if not pressed and button == 1 then
+    clicking = false
+  end
+  
+  if game_mousehandler_abilities(x,y,button,pressed) then
+    return
+  end
+  
   if pressed then
     if button == 1 then
       move_char()
       last_move_s = love.timer.getTime()
       
       clicking = true
-    end
-  else
-    if button == 1 then
-      clicking = false
     end
   end
 end
@@ -491,11 +658,11 @@ end
 function love.load()
   state_init()
   debug_init()
+  assets_init()
   world_init()
   game_init()
   
   register_key_handlers()
-  map_abilities()
   
   key_release_callbacks = {}
   mouse_release_callbacks = {}
