@@ -48,7 +48,17 @@ local Abilities = {
 local Images = {
   ["bin"] = "bin.png",
   ["love"] = "love.png",
-  ["broken"] = "broken.png"
+  ["broken"] = "broken.png",
+  ["invis"] = "invis.png",
+  ["beam"] = "beam.png",
+  ["cantrip"] = "cantrip.png",
+  ["root"] = "root.png",
+  ["negate"] = "negate.png",
+  ["push"] = "push.png",
+  ["rage"] = "rage.png",
+  ["reflect"] = "reflect.png",
+  ["stun"] = "stun.png",
+  ["pull"] = "pull.png"
 }
 local GameUI = {
   "spells",
@@ -402,6 +412,17 @@ function update_player(player)
   game_dbg_pos = player.pos
 end
 
+----> Get player abilities
+function get_abilities(username)
+  if world == nil or world.players[username] == nil then
+    return nil
+  end
+
+  local player = world.players[username]
+  return player.abilities
+end
+
+----> Player uses ability
 function use_ability(username,ability_num)
   if world ~= nil and world.players[username] ~= nil then
     player = world.players[username]
@@ -492,6 +513,7 @@ function screen_to_world(x,y)
   }
 end
 
+----> Convert world to screen
 function world_to_screen(x,y)
   if world == nil or world.players[DEFAULT_USERNAME] == nil then
     return nil
@@ -543,12 +565,13 @@ function game_update()
   world_update()
 end
 
+----> Abilities bar mouse click
 function game_mousehandler_abilities(x,y,button,pressed)
   if pressed and button == 1 then
     local w = love.graphics.getWidth()
     local h = love.graphics.getHeight()
     
-    local l = 50
+    local l = 80
     local m = l / 10
     
     local xm = 5
@@ -578,25 +601,40 @@ function game_draw_abilities()
   local w = love.graphics.getWidth()
   local h = love.graphics.getHeight()
   
+  local abilities = get_abilities(DEFAULT_USERNAME)
+
   local ability_key_inv = {}
   for key,ability_num in pairs(AbilityKey) do
     ability_key_inv[ability_num] = key:upper()
   end
   
-  local l = 50
+  local l = 80
   local m = l / 10
-  
+  local r = 10
+
   local x = m
   local y = h - m
+
+  local imgl = l - m
     
   local i = 6
   while i <= 10 do
-    love.graphics.setColor(Color["black"])
+
+    love.graphics.setColor(Color["blue"])
     love.graphics.rectangle('fill',x,y - l,l,l)
-    
+
+    local ability_img = get_image(abilities[i])
+    local xscale = imgl / ability_img.w
+    local yscale = imgl / ability_img.h
+    love.graphics.setColor(1,1,1,1)
+    love.graphics.draw(ability_img.img,x + m / 2, y - l + m/2, 0, xscale, yscale)
+
+    love.graphics.setColor(Color["black"])
+    love.graphics.circle("fill",x + r, y - l + r + 2,r)
+
     love.graphics.setColor(Color["white"])
-    love.graphics.print(ability_key_inv[i],x,y - l)
-    
+    love.graphics.print(ability_key_inv[i],x + m/2 + 2,y - l + m/2)
+
     x = x + m + l
     i = i + 1
   end
@@ -607,10 +645,19 @@ function game_draw_abilities()
   while i <= 5 do
     love.graphics.setColor(Color["blue"])
     love.graphics.rectangle('fill',x,y - l,l,l)
-    
+
+    local ability_img = get_image(abilities[i])
+    local xscale = imgl / ability_img.w
+    local yscale = imgl / ability_img.h
+    love.graphics.setColor(1,1,1,1)
+    love.graphics.draw(ability_img.img,x + m / 2, y - l + m/2, 0, xscale, yscale)
+
+    love.graphics.setColor(Color["black"])
+    love.graphics.circle("fill",x + r, y - l + r + 2,r)
+
     love.graphics.setColor(Color["white"])
-    love.graphics.print(ability_key_inv[i],x,y - l)
-    
+    love.graphics.print(ability_key_inv[i],x + m/2 + 2,y - l + m/2)
+
     x = x + m + l
     i = i + 1
   end
