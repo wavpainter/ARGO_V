@@ -1,3 +1,5 @@
+local json = require("json")
+
 --> CONSTANTS
 ----> Util
 local Color = {
@@ -8,6 +10,27 @@ local Color = {
   ["white"] = { 1, 1, 1 },
   ["lightgrey"] = {0.8, 0.8, 0.8}
 }
+
+local Alphabet = "abcdefghijklmnopqrstuvwxyz"
+local Digits = "0123456789"
+
+local LegalKeys = {
+  ["space"] = " ",
+  ["shift space"] = " ",
+  ["shift -"] = "_",
+  ["."] = ".",
+}
+
+for i = 1,#Alphabet do
+  local c = Alphabet:sub(i,i)
+  local C = string.upper(c)
+  LegalKeys[c] = c
+  LegalKeys["shift " .. c] = C
+end
+for i = 1,#Digits do
+  local c = Digits:sub(i,i)
+  LegalKeys[c] = c
+end
 
 ----> State
 local View = {
@@ -125,6 +148,7 @@ local paused = nil
 local log_ledger = nil
 local n_logs = nil
 local log_file = nil
+local debug_input = nil
 
 ----> Assets
 local loaded_images = nil
@@ -182,91 +206,20 @@ function new_pos(x1,y1,x2,y2,speed)
   end
 end
 
---> STATE
-----> Initialise
-function state_init()
-  view = nil
-  debug = nil
-  paused = nil
-end
-
---> DEBUG
-----> Initialise
-function debug_init()
-  log_ledger = {}
-  n_logs = 0
-  love.filesystem.createDirectory("logs")
-  local log_filename = "logs/" .. os.date("%Y%m%d%H%M%S") .. ".txt"
-  log_file = love.filesystem.newFile(log_filename)
-  log_file:open("w")
-end
-
-----> Log to text
-function log_text(log)
-  return log.logtype .. " - " .. log.datetime .. ": " .. log.message
-end
-
-----> Draw
-function debug_draw()
-  local w = love.graphics.getWidth()
-  local h = love.graphics.getHeight()
-  local f = love.graphics.getFont()
-  local lh = f:getHeight()
-  
-  -- Fade background
-  love.graphics.setColor(0,0,0,0.5)
-  love.graphics.rectangle("fill",0,0,w,h)
-  
-  -- Player position
-  love.graphics.setColor(1,1,1,1)
-  if game_dbg_pos ~= nil then
-    love.graphics.printf("Player position: " .. math.floor(game_dbg_pos.x * 10) / 10 .. " " .. math.floor(game_dbg_pos.y * 10) / 10,0,0,w)
+function split_spaces(str)
+  local str_arr = {}
+  for x in str:gmatch("([^ ]+) ?") do
+    table.insert(str_arr,x)
   end
-  
-  -- Tick
-  if world_dbg_tick ~= nil then
-    love.graphics.printf("World tick: " .. tostring(world_dbg_tick),0,lh,w)
-  end
-  
-  -- Logs
-  local y = h - 2 * lh
-  local n = 10
-  local li = n_logs
-  local l = 1
-  
-  while l <= n do
-    if li < 1 then
-      break
-    end
-    
-    local log = log_ledger[li]
-    local logtext = log_text(log)
-    
-    local ltwidth, wrappedtext = f:getWrap(logtext,w - f:getWidth("\t"))
-    local reversed_lines = {}
-    for _,line in pairs(wrappedtext) do
-      table.insert(reversed_lines,line)
-    end
-    
-    for i,line in pairs(reversed_lines) do
-      love.graphics.setColor(1,1,1,1)
-      if i == 1 then
-        love.graphics.printf(line,0,y,w)
-        y = y - lh
-        l = l + 1
-      else
-        love.graphics.printf("\t" .. line,0,y,w)
-        y = y - lh
-        l = l + 1
-      end
-    end
-    
-    li = li - 1
-  end
+
+  return str_arr
 end
 
 ----> Log information
 function log_info(message)
+  if message == nil then
+    message = "????"
+  end
   local new_log = {
     logtype = "info",
     datetime = os.date("%Y-%m-%d %H:%M:%S"),
@@ -281,6 +234,9 @@ end
 
 ----> Log warning
 function log_warning(message)
+  if message == nil then
+    message = "????"
+  end
   local new_log = {
     logtype = "warn",
     datetime = os.date("%Y-%m-%d %H:%M:%S"),
@@ -295,6 +251,9 @@ end
 
 ----> Log error
 function log_error(message)
+  if message == nil then
+    message = "????"
+  end
   local new_log = {
     logtype = "err",
     datetime = os.date("%Y-%m-%d %H:%M:%S"),
@@ -307,17 +266,46 @@ function log_error(message)
   log_file:flush()
 end
 
-----> Capturing debug handler
-function debug_keyhandler(key,pressed)
-  if pressed then
 
+function save_world_to(savename)
+  if world ~= nil then
+    local encoded = json.encode(world.deets)
+    local f = love.filesystem.newFile(savename .. ".json")
+    f:open("w")
+    f:write(encoded)
+    f:close()
+
+    log_info("Saved to " .. savename)
+  else
+    log_warning("Cannot save, no world loaded")
   end
 end
 
-----> Capturing debug mous handler
-function debug_mousehandler(x,y,button,pressed)
-  
+function load_world_from(savename)
+  local savefile = savename .. ".json"
+  local f_details = love.filesystem.getInfo(savefile)
+  if f_details == nil then
+    log_warning("No save file called " .. savefile)
+    return
+  end
+  local f = love.filesystem.newFile(savefile)
+  f:open("r")
+  local encoded = f:read()
+  f:close()
+  local world_deets = json.decode(encoded)
+  world_load(world_deets)
+  world_join(DEFAULT_USERNAME)
 end
+
+--> STATE
+----> Initialise
+function state_init()
+  view = nil
+  debug = nil
+  paused = nil
+end
+
+
 
 --> ASSETS
 ----> Initialise
@@ -373,10 +361,7 @@ function draw_background(bg,sc)
   local w = love.graphics.getWidth()
   local h = love.graphics.getHeight()
   
-  local pattern = {}
-  for x in bg:gmatch("([^ ]+) ?") do
-    table.insert(pattern,x)
-  end
+  local pattern = split_spaces(bg)
   
   if pattern[1] == "tiles" then
     local col1 = pattern[2]
@@ -432,11 +417,8 @@ function world_draw()
   for username,p in pairs(players) do
     if username == DEFAULT_USERNAME and p.move_target ~= nil then
       local tpos = world_to_screen(p.move_target.x,p.move_target.y)
-      local img = get_image("target")
-      local xscale = PLAYER_L / img.w / 2
-      local yscale = PLAYER_L / img.h / 2
-      love.graphics.setColor(1,1,1)
-      love.graphics.draw(img.img,tpos.x - PLAYER_L/4,tpos.y - PLAYER_L/4,0,xscale,yscale)
+      love.graphics.setColor(0,1,0)
+      love.graphics.circle("fill",tpos.x,tpos.y,PLAYER_L/8)
     end
 
     local pos = world_to_screen(p.x,p.y)
@@ -898,6 +880,137 @@ function game_mousehandler(x,y,button,pressed)
   end
 end
 
+--> DEBUG
+----> Initialise
+function debug_init()
+  log_ledger = {}
+  n_logs = 0
+  love.filesystem.createDirectory("logs")
+  local log_filename = "logs/" .. os.date("%Y%m%d%H%M%S") .. ".txt"
+  log_file = love.filesystem.newFile(log_filename)
+  log_file:open("w")
+  debug_input = ""
+end
+
+----> Log to text
+function log_text(log)
+  return log.logtype .. " - " .. log.datetime .. ": " .. log.message
+end
+
+----> Draw
+function debug_draw()
+  local w = love.graphics.getWidth()
+  local h = love.graphics.getHeight()
+  local f = love.graphics.getFont()
+  local lh = f:getHeight()
+  
+  -- Fade background
+  love.graphics.setColor(0,0,0,0.7)
+  love.graphics.rectangle("fill",0,0,w,h)
+  
+  -- Player position
+  love.graphics.setColor(1,1,1,1)
+  if game_dbg_pos ~= nil then
+    love.graphics.printf("Player position: " .. math.floor(game_dbg_pos.x * 10) / 10 .. " " .. math.floor(game_dbg_pos.y * 10) / 10,0,0,w)
+  end
+  
+  -- Tick
+  if world_dbg_tick ~= nil then
+    love.graphics.printf("World tick: " .. tostring(world_dbg_tick),0,lh,w)
+  end
+  
+  -- Logs
+  local y = h - 3 * lh
+  local n = 10
+  local li = n_logs
+  local l = 1
+  
+  while l <= n do
+    if li < 1 then
+      break
+    end
+    
+    local log = log_ledger[li]
+    local logtext = log_text(log)
+    
+    local ltwidth, wrappedtext = f:getWrap(logtext,w - f:getWidth("\t"))
+    local n_lines = 0
+    for _,line in pairs(wrappedtext) do
+      n_lines = n_lines + 1
+    end
+    
+    for i = n_lines,1,-1 do
+      love.graphics.setColor(1,1,1,1)
+      if i == 1 then
+        love.graphics.printf(wrappedtext[i],0,y,w)
+        y = y - lh
+        l = l + 1
+      else
+        love.graphics.printf("\t" .. wrappedtext[i],0,y,w)
+        y = y - lh
+        l = l + 1
+      end
+    end
+    
+    li = li - 1
+  end
+
+  -- Input
+  love.graphics.setColor(1,1,1,0.2)
+  love.graphics.rectangle("fill",0.5 * lh,h - 1.5 * lh,w - lh,lh)
+
+  love.graphics.setColor(1,1,1,1)
+  love.graphics.printf(debug_input,0.5 * lh, h - 1.5 * lh,w - lh)
+end
+
+
+----> Debug command
+function debug_command(input_str)
+  log_info("> " .. input_str)
+
+  local split_command = split_spaces(input_str)
+  local command = split_command[1]
+  if command == "save" then
+    local savename = split_command[2]
+    if savename ~= nil then
+      save_world_to(savename)
+    end
+  elseif command == "load" then
+    local savename = split_command[2]
+    if savename ~= nil then
+      load_world_from(savename)
+    end
+  else
+    log_warning("Unknown command: " .. command)
+  end
+end
+
+----> Capturing debug handler
+function debug_keyhandler(key,pressed)
+  if pressed then
+    if key == 'return' then
+      debug_command(debug_input)
+      debug_input = ""
+    elseif key == 'backspace' or key == 'delete' then
+      debug_input = string.sub(debug_input,1,string.len(debug_input)-1)
+    else
+      local keytest = key
+      if love.keyboard.isDown("lshift") or love.keyboard.isDown("rshift") then
+        keytest = "shift " .. key
+      end
+      local char = LegalKeys[keytest]
+      if char then
+        debug_input = debug_input .. char
+      end
+    end
+  end
+end
+
+----> Capturing debug mous handler
+function debug_mousehandler(x,y,button,pressed)
+  
+end
+
 --> LOVE
 ----> Load
 function love.load()
@@ -945,7 +1058,7 @@ end
 function keyrouter(key,pressed)
   -- Toggle Debug
   if key == "f3" and pressed then
-    if debug == Debug.HIDDEN then
+    if debug ~= Debug.SHOWN then
       debug = Debug.SHOWN
     else
       debug = Debug.HIDDEN
@@ -953,11 +1066,11 @@ function keyrouter(key,pressed)
   end
   
   -- Toggle capturing Debug
-  if key == "f4" and pressed and debug ~= Debug.HIDDEN then
-    if debug == Debug.SHOWN then
+  if key == "f4" and pressed then
+    if debug ~= Debug.CAPTURING then
       debug = Debug.CAPTURING
     else
-      debug = Debug.SHOWN
+      debug = Debug.HIDDEN
     end
   end
   
