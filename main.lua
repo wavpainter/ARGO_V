@@ -58,7 +58,8 @@ local Images = {
   ["rage"] = "rage.png",
   ["reflect"] = "reflect.png",
   ["stun"] = "stun.png",
-  ["pull"] = "pull.png"
+  ["pull"] = "pull.png",
+  ["jason"] = "jason.png"
 }
 local GameUI = {
   "spells",
@@ -101,10 +102,12 @@ local DEFAULT_PLAYER = {
     [8] = "reflect",
     [9] = "stun",
     [10] = "pull"
-  }
+  },
+  avatar = "jason"
 }
 local DEFAULT_USERNAME = "jason"
 local MOVE_DELAY_S = 0.1
+local PLAYER_L = 75
 
 --> VARIABLES
 ----> State
@@ -381,8 +384,8 @@ end
 
 ----> Draw
 function world_draw()
-  local player_pos = world.players[DEFAULT_USERNAME].pos
-  local sc = screen_coords(player_pos.x,player_pos.y)
+  local player = world.players[DEFAULT_USERNAME]
+  local sc = screen_coords(player.x,player.y)
   local bg = world.deets.background
   
   if bg ~= nil then
@@ -398,18 +401,27 @@ function world_draw()
     love.graphics.setColor(1,1,1)
     love.graphics.draw(img.img, pos.x,pos.y,0,xscale,yscale)
   end
+
+  local players = world.players
+  for _,p in pairs(players) do
+    local pos = world_to_screen(p.x,p.y)
+    local img = get_image(p.avatar)
+    local xscale = PLAYER_L / img.w
+    local yscale = PLAYER_L / img.h
+    love.graphics.setColor(1,1,1)
+    love.graphics.draw(img.img,pos.x - PLAYER_L/2,pos.y - PLAYER_L/2,0,xscale,yscale)
+  end
 end
 
 ----> Update player
 function update_player(player)
-  local pos = player.pos
-  local target = player.target
   
-  player.pos = {
-    x = pos.x + (target.x - pos.x) / 10,
-    y = pos.y + (target.y - pos.y) / 10,
+  player.x = player.x + (player.xt - player.x) / 10
+  player.y = player.y + (player.yt - player.y) / 10
+  game_dbg_pos = {
+    x = player.x,
+    y = player.y
   }
-  game_dbg_pos = player.pos
 end
 
 ----> Get player abilities
@@ -481,8 +493,11 @@ function world_join(username)
   local spawn = world.deets.spawn
   local new_player = {
     abilities = DEFAULT_PLAYER.abilities,
-    pos = { x = spawn.x, y = spawn.y },
-    target = { x = spawn.x, y = spawn.y },
+    avatar = DEFAULT_PLAYER.avatar,
+    x = spawn.x,
+    y = spawn.y,
+    xt = spawn.x,
+    yt = spawn.y
   }
   
   world.players[username] = new_player
@@ -491,10 +506,9 @@ end
 ----> Set move target
 function set_target(username,x,y)
   if world ~= nil and world.players[username] ~= nil then
-    world.players[username].target = {
-      x = x,
-      y = y,
-    }
+    local player = world.players[username]
+    player.xt = x
+    player.yt = y
   end
 end
 
@@ -504,8 +518,8 @@ function screen_to_world(x,y)
     return nil
   end
   
-  local player_pos = world.players[DEFAULT_USERNAME].pos
-  local sc = screen_coords(player_pos.x,player_pos.y)
+  local player = world.players[DEFAULT_USERNAME]
+  local sc = screen_coords(player.x,player.y)
   
   return {
     x = x + sc.x1,
@@ -519,8 +533,8 @@ function world_to_screen(x,y)
     return nil
   end
   
-  local player_pos = world.players[DEFAULT_USERNAME].pos
-  local sc = screen_coords(player_pos.x,player_pos.y)
+  local player = world.players[DEFAULT_USERNAME]
+  local sc = screen_coords(player.x,player.y)
   
   return {
     x = x - sc.x1,
