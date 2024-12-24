@@ -93,7 +93,7 @@ local GameUI = {
 local Entities = {
   ["dummy"] = {
     targetable = "true",
-    health = 987654321
+    hp = 987654321
   }
 }
 local Spells = {
@@ -156,7 +156,8 @@ local DEFAULT_PLAYER = {
     [10] = "pull"
   },
   avatar = "jason",
-  shoot_speed = 10,
+  shoot_speed = 4,
+  damage = 10
 }
 local DEFAULT_USERNAME = "jason"
 local MOVE_DELAY_S = 0.15
@@ -192,6 +193,7 @@ local game_keyhandlers = nil
 local clicking = nil
 local last_move_s = nil
 local game_dbg_pos = nil
+local particles = nil
 
 ----> LOVE
 local key_release_callbacks = nil
@@ -494,10 +496,18 @@ function world_draw()
       love.graphics.draw(img.img,pos.x-e.w/2,pos.y-e.h/2,0,xscale,yscale)
 
       if entity.targetable then
-
         love.graphics.setColor(1,triangle(0.5),0)
         love.graphics.rectangle("line",pos.x-e.w/2-5,pos.y-e.h/2-5,e.w+10,e.h+10)
       end
+
+      local hpw = 80
+      local hph = 10
+      love.graphics.setColor(0,0,0)
+      love.graphics.rectangle("fill",pos.x - hpw/2,pos.y + e.h/2 + hph,hpw,hph)
+      local hpv = (e.hp / entity.hp) * hpw
+      love.graphics.setColor(0,1,0)
+      love.graphics.rectangle("fill",pos.x - hpw/2,pos.y + e.h/2 + hph,hpv,hph)
+
     end
   end
 
@@ -641,9 +651,48 @@ function update_bullet(bullet,tick)
   end
 end
 
+----> Create hit particle
+function create_hit_particle(damage,x,y,h)
+  local t0 = love.timer.getTime()
+  local freq = 2
+  local phase = math.random() / freq
+  table.insert(particles,{
+    text = "-" .. tostring(damage),
+    size = 20,
+    color = {1,0,0},
+    x = x,
+    y = y,
+    should_destroy = function(p)
+      p.color = {1,0,triangle(freq,phase)}
+      p.y = p.y + ((y - h) - p.y) / 16
+      p.x = x + 10 * (triangle(freq,phase) - 0.5)
+      if love.timer.getTime() - t0 > 0.7 then
+        return true
+      else
+        return false
+      end
+    end
+  })
+end
+
 ----> Resolve bullet
 function resolve_bullet(bullet)
+  -- Create hit particle
+  local source = bullet.source
+  local source_parts = split_spaces(source)
+  if source_parts[1] == "player" and source_parts[2] == DEFAULT_USERNAME then
+    if world.players[source_parts[2]] ~= nil then
+      local player = world.players[source_parts[2]]
+      local h = 50
+      if bullet.target.type == "entity" then
+        local ent = get_entity(bullet.target.name)
+        ent.hp = ent.hp - player.damage
+        h = ent.h/2 + 20
+      end
 
+      create_hit_particle(player.damage,bullet.x,bullet.y,h)
+    end
+  end
 end
 
 ----> Update
@@ -688,10 +737,12 @@ function world_load(world_deets)
   local new_world_entities = {}
   if world_deets.entities ~= nil then
     for ename,edef in pairs(world_deets.entities) do
+      local entitytype = Entities[edef.isa]
       new_world_entities[ename] = {
         sprite = edef.sprite,
         visible = edef.visible,
         isa = edef.isa,
+        hp = entitytype.hp,
         x = edef.x,
         y = edef.y,
         w = edef.w,
@@ -722,6 +773,7 @@ function world_join(username)
     abilities = DEFAULT_PLAYER.abilities,
     avatar = DEFAULT_PLAYER.avatar,
     shoot_speed = DEFAULT_PLAYER.shoot_speed,
+    damage = DEFAULT_PLAYER.damage,
     x = spawn.x,
     y = spawn.y,
     move_target = nil,
@@ -839,6 +891,7 @@ function game_init()
   clicking = false
   last_move_s = love.timer.getTime()
   game_dbg_pos = nil
+  particles = {}
 end
 
 ----> Move
@@ -963,11 +1016,36 @@ function game_draw_abilities()
   end
 end
 
+----> Draw particles
+function game_draw_particles()
+  local f = love.graphics.getFont()
+
+  local n = 0
+  for i,part in pairs(particles) do
+    if part.text ~= nil then
+      local tw = f:getWidth(part.text)
+      local th = f:getHeight(part.text)
+      local pos = world_to_screen(part.x,part.y)
+
+      love.graphics.setColor(part.color)
+      love.graphics.print(part.text,pos.x - tw/2,pos.y - th/2)
+
+      if part.should_destroy(part) then
+        particles[i] = nil
+      end
+    end
+
+    n = n + 1
+  end
+  log_info(tostring(n) .. " particles")
+end
+
 ----> Draw
 function game_draw()
   if world ~= nil and world.players[DEFAULT_USERNAME] ~= nil then
     world_draw()
     game_draw_abilities()
+    game_draw_particles()
   else
     love.graphics.printf("Loading",0,0,800)
   end
@@ -979,7 +1057,7 @@ function action()
 end
 
 ----> Use ability
-function ability_handler(key, pressed) 
+function ability_handler(key, pressed)
   if pressed then
     local ability_num = AbilityKey[key]
     use_ability(DEFAULT_USERNAME,ability_num)
@@ -993,7 +1071,12 @@ function register_key_handlers()
   end
   game_keyhandlers["space"] = function(key,pressed) if pressed then action() end end
   game_keyhandlers["f"] = function(key,pressed) if pressed then toggle_shooting(DEFAULT_USERNAME) end end
-  game_keyhandlers["c"] = function(key,pressed) if pressed then clear_shoot_target(DEFAULT_USERNAME) end end
+  game_keyhandlers["d"] = function(key,pressed) 
+    if pressed then 
+      clear_shoot_target(DEFAULT_USERNAME) 
+      set_shooting(DEFAULT_USERNAME,false)
+    end 
+  end
 end
 
 ----> Key handler
