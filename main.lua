@@ -6,6 +6,7 @@ local Color = {
   ["blue"] = { 0, 0, 1 },
   ["black"] = { 0, 0, 0 },
   ["white"] = { 1, 1, 1 },
+  ["lightgrey"] = {0.8, 0.8, 0.8}
 }
 
 ----> State
@@ -59,7 +60,8 @@ local Images = {
   ["reflect"] = "reflect.png",
   ["stun"] = "stun.png",
   ["pull"] = "pull.png",
-  ["jason"] = "jason.png"
+  ["jason"] = "jason.png",
+  ["target"] = "target.png"
 }
 local GameUI = {
   "spells",
@@ -73,7 +75,7 @@ local Spells = {
 local DEFAULT_WORLD = {
   boundaries = { x1 = -10000, x2 = 10000, y1 = -10000, y2 = 10000 },
   spawn = {x = 0, y = 0 },
-  background = "tiles white green 200 200",
+  background = "tiles lightgrey white 100 100",
   objects = { {
     sprite = "bin",
     x = 200,
@@ -103,11 +105,15 @@ local DEFAULT_PLAYER = {
     [9] = "stun",
     [10] = "pull"
   },
-  avatar = "jason"
+  avatar = "jason",
+  shoot_speed = 2,
 }
 local DEFAULT_USERNAME = "jason"
-local MOVE_DELAY_S = 0.1
+local MOVE_DELAY_S = 0.15
 local PLAYER_L = 75
+local MOVE_SPEED = 1000
+local BULLET_SPEED = 1500
+local BULLET_RADIUS = 10
 
 --> VARIABLES
 ----> State
@@ -154,6 +160,26 @@ function screen_coords(x,y)
     y1 = y - h/2,
     y2 = y + h/2
   }
+end
+
+function new_pos(x1,y1,x2,y2,speed)
+  local target_dist = math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2)
+  local t_remain = target_dist / speed
+  local dt = love.timer.getDelta()
+  if t_remain <= dt then
+    return {
+      arrived = true,
+      x = x2,
+      y = y2,
+    }
+  else
+    local scale = dt / t_remain
+    return {
+      arrived = false,
+      x = x1 + (x2 - x1) * scale,
+      y = y1 + (y2 - y1) * scale
+    }
+  end
 end
 
 --> STATE
@@ -403,21 +429,93 @@ function world_draw()
   end
 
   local players = world.players
-  for _,p in pairs(players) do
+  for username,p in pairs(players) do
+    if username == DEFAULT_USERNAME and p.move_target ~= nil then
+      local tpos = world_to_screen(p.move_target.x,p.move_target.y)
+      local img = get_image("target")
+      local xscale = PLAYER_L / img.w / 2
+      local yscale = PLAYER_L / img.h / 2
+      love.graphics.setColor(1,1,1)
+      love.graphics.draw(img.img,tpos.x - PLAYER_L/4,tpos.y - PLAYER_L/4,0,xscale,yscale)
+    end
+
     local pos = world_to_screen(p.x,p.y)
     local img = get_image(p.avatar)
     local xscale = PLAYER_L / img.w
     local yscale = PLAYER_L / img.h
     love.graphics.setColor(1,1,1)
     love.graphics.draw(img.img,pos.x - PLAYER_L/2,pos.y - PLAYER_L/2,0,xscale,yscale)
+
+    if username == DEFAULT_USERNAME and p.shoot_target ~= nil then
+      local spos = nil
+      if p.shoot_target.type == "pos" then
+        spos = world_to_screen(p.shoot_target.x,p.shoot_target.y)
+      else
+        spos = world_to_screen(0,0)
+      end
+      local img = get_image("target")
+      local xscale = PLAYER_L / img.w / 2
+      local yscale = PLAYER_L / img.h / 2
+      love.graphics.setColor(1,1,1)
+      love.graphics.draw(img.img,spos.x - PLAYER_L / 4, spos.y - PLAYER_L/4,0,xscale,yscale)
+    end
+  end
+
+  local bullets = world.bullets
+  for _,bullet in pairs(bullets) do
+    local bpos = world_to_screen(bullet.x,bullet.y)
+    love.graphics.setColor(1,0,0)
+    love.graphics.circle("fill",bpos.x,bpos.y,BULLET_RADIUS)
+  end
+end
+
+----> Have player shoot at something
+function shoot_bullet(player)
+  if player.shoot_target ~= nil then
+    local new_bullet = {
+      source = "player " .. player.username,
+      x = player.x,
+      y = player.y
+    }
+
+    if player.shoot_target.type == "pos" then
+      new_bullet.target = {
+        type = "pos",
+        x = player.shoot_target.x,
+        y = player.shoot_target.y
+      }
+    else
+      new_bullet.target = {
+        type = "pos",
+        x = 0,
+        y = 0
+      }
+    end
+
+    table.insert(world.bullets,new_bullet)
   end
 end
 
 ----> Update player
-function update_player(player)
-  
-  player.x = player.x + (player.xt - player.x) / 10
-  player.y = player.y + (player.yt - player.y) / 10
+function update_player(player,tick)
+  if player.move_target ~= nil then
+    local new_pos = new_pos(player.x,player.y,player.move_target.x,player.move_target.y,MOVE_SPEED)
+    player.x = new_pos.x
+    player.y = new_pos.y
+    if new_pos.arrived then
+      player.move_target = nil
+    end
+  end
+
+  if player.shooting and player.shoot_target ~= nil then
+    local shoot_period = 60 / player.shoot_speed
+
+    if player.last_shoot == nil or tick - player.last_shoot > shoot_period then
+      shoot_bullet(player)
+      player.last_shoot = tick
+    end
+  end
+
   game_dbg_pos = {
     x = player.x,
     y = player.y
@@ -445,6 +543,20 @@ function use_ability(username,ability_num)
   end
 end
 
+----> Update bullet
+function update_bullet(bullet,tick)
+  if bullet.target ~= nil then
+    if bullet.target.type == "pos" then
+      local new_pos = new_pos(bullet.x,bullet.y,bullet.target.x,bullet.target.y,BULLET_SPEED)
+      bullet.x = new_pos.x
+      bullet.y = new_pos.y
+      if new_pos.arrived then
+        bullet.target = nil
+      end
+    end
+  end
+end
+
 ----> Update
 function world_update()
   if world ~= nil then
@@ -453,7 +565,12 @@ function world_update()
     
     local players = world.players
     for name,player in pairs(players) do
-      update_player(player)
+      update_player(player,world.tick)
+    end
+
+    local bullets = world.bullets
+    for _,bullet in pairs(bullets) do
+      update_bullet(bullet,world.tick)
     end
   end
 end
@@ -480,7 +597,8 @@ function world_load(world_deets)
     deets = world_deets,
     players = {},
     mobs = {},
-    objects = new_world_objs
+    objects = new_world_objs,
+    bullets = {}
   }
   
   world = new_world
@@ -492,12 +610,16 @@ function world_join(username)
   
   local spawn = world.deets.spawn
   local new_player = {
+    username = username,
     abilities = DEFAULT_PLAYER.abilities,
     avatar = DEFAULT_PLAYER.avatar,
+    shoot_speed = DEFAULT_PLAYER.shoot_speed,
     x = spawn.x,
     y = spawn.y,
-    xt = spawn.x,
-    yt = spawn.y
+    move_target = nil,
+    shoot_target = nil,
+    shooting = false,
+    last_shoot = nil,
   }
   
   world.players[username] = new_player
@@ -507,8 +629,42 @@ end
 function set_target(username,x,y)
   if world ~= nil and world.players[username] ~= nil then
     local player = world.players[username]
-    player.xt = x
-    player.yt = y
+    player.move_target = {
+      x = x,
+      y = y
+    }
+  end
+end
+
+----> Check if player is shooting
+function is_shooting(username)
+  if world ~= nil and world.players[username] ~= nil then
+    return world.players[username].shooting
+  end
+end
+
+----> Set player shooting
+function set_shooting(username,is_shooting)
+  if world ~= nil and world.players[username] ~= nil then
+    world.players[username].shooting = is_shooting
+  end
+end
+function toggle_shooting(username)
+  log_info("Toggling shooting for " .. username)
+  if world ~= nil and world.players[username] ~= nil then
+    world.players[username].shooting = not world.players[username].shooting
+  end
+end
+
+----> Set shoot target position
+function set_shoot_target(username,x,y)
+  if world ~= nil and world.players[username] ~= nil then
+    local player = world.players[username]
+    player.shoot_target = {
+      type = "pos",
+      x = x,
+      y = y
+    }
   end
 end
 
@@ -708,6 +864,7 @@ function register_key_handlers()
     game_keyhandlers[k] = ability_handler
   end
   game_keyhandlers["space"] = action_handler
+  game_keyhandlers["f"] = function(key,pressed) if pressed then toggle_shooting(DEFAULT_USERNAME) end end
 end
 
 ----> Key handler
@@ -734,6 +891,9 @@ function game_mousehandler(x,y,button,pressed)
       last_move_s = love.timer.getTime()
       
       clicking = true
+    elseif button == 2 then
+      local pos = screen_to_world(x,y)
+      set_shoot_target(DEFAULT_USERNAME,pos.x,pos.y)
     end
   end
 end
