@@ -84,10 +84,17 @@ local Images = {
   ["stun"] = "stun.png",
   ["pull"] = "pull.png",
   ["jason"] = "jason.png",
-  ["target"] = "target.png"
+  ["target"] = "target.png",
+  ["dummy"] = "dummy.png"
 }
 local GameUI = {
   "spells",
+}
+local Entities = {
+  ["dummy"] = {
+    targetable = "true",
+    health = 987654321
+  }
 }
 local Spells = {
   MARGIN_X = 10,
@@ -99,6 +106,26 @@ local DEFAULT_WORLD = {
   boundaries = { x1 = -10000, x2 = 10000, y1 = -10000, y2 = 10000 },
   spawn = {x = 0, y = 0 },
   background = "tiles lightgrey white 100 100",
+  entities = {
+    ["dummy1"] = {
+      sprite = "dummy",
+      visible = "true",
+      isa = "dummy",
+      x = -200,
+      y = -200,
+      w = 80,
+      h = 80
+    },
+    ["dummy2"] = {
+      sprite = "dummy",
+      visible = "true",
+      isa = "dummy",
+      x = 0,
+      y = -200,
+      w = 80,
+      h = 80
+    }
+  },
   objects = { {
     sprite = "bin",
     x = 200,
@@ -129,7 +156,7 @@ local DEFAULT_PLAYER = {
     [10] = "pull"
   },
   avatar = "jason",
-  shoot_speed = 2,
+  shoot_speed = 10,
 }
 local DEFAULT_USERNAME = "jason"
 local MOVE_DELAY_S = 0.15
@@ -186,6 +213,37 @@ function screen_coords(x,y)
   }
 end
 
+function triangle(hz,phase)
+  if phase == nil then phase = 0 end
+  local period = 1 / hz
+  local half_period = period / 2
+  local x = (love.timer.getTime() + phase) % period
+  if x < half_period then
+    return x / half_period
+  else
+    return 1 - ((x - half_period) / half_period)
+  end
+end
+
+function saw(hz,phase)
+  if phase == nil then phase = 0 end
+  local period = 1 / hz
+  local x = (love.timer.getTime() + phase) % period
+  return x / period
+end
+
+function square(hz,phase)
+  if phase == nil then phase = 0 end
+  local period = 1 / hz
+  local half_period = period / 2
+  local x = (love.timer.getTime() + phase) % period
+  if x < half_period then
+    return 1
+  else
+    return 0
+  end
+end
+
 function new_pos(x1,y1,x2,y2,speed)
   local target_dist = math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2)
   local t_remain = target_dist / speed
@@ -213,6 +271,10 @@ function split_spaces(str)
   end
 
   return str_arr
+end
+
+function euclid(x1,y1,x2,y2)
+  return math.sqrt((x1 - x2) ^2 + (y1 - y2) ^2)
 end
 
 ----> Log information
@@ -393,6 +455,13 @@ function draw_background(bg,sc)
   end
 end
 
+----> Get entity
+function get_entity(name)
+  if world ~= nil and world.entities[name] ~= nil then
+    return world.entities[name]
+  end
+end
+
 ----> Draw
 function world_draw()
   local player = world.players[DEFAULT_USERNAME]
@@ -410,7 +479,26 @@ function world_draw()
     local xscale = o.w / img.w
     local yscale = o.h / img.h
     love.graphics.setColor(1,1,1)
-    love.graphics.draw(img.img, pos.x,pos.y,0,xscale,yscale)
+    love.graphics.draw(img.img, pos.x-o.w/2,pos.y-o.h/2,0,xscale,yscale)
+  end
+
+  local entities = world.entities
+  for ename,e in pairs(entities) do
+    if e.visible then
+      local entity = Entities[e.isa]
+      local pos = world_to_screen(e.x,e.y)
+      local img = get_image(e.sprite)
+      local xscale = e.w / img.w
+      local yscale = e.h / img.h
+      love.graphics.setColor(1,1,1)
+      love.graphics.draw(img.img,pos.x-e.w/2,pos.y-e.h/2,0,xscale,yscale)
+
+      if entity.targetable then
+
+        love.graphics.setColor(1,triangle(0.5),0)
+        love.graphics.rectangle("line",pos.x-e.w/2-5,pos.y-e.h/2-5,e.w+10,e.h+10)
+      end
+    end
   end
 
   local players = world.players
@@ -432,6 +520,9 @@ function world_draw()
       local spos = nil
       if p.shoot_target.type == "pos" then
         spos = world_to_screen(p.shoot_target.x,p.shoot_target.y)
+      elseif p.shoot_target.type == "entity" then
+        local ent = get_entity(p.shoot_target.name)
+        spos = world_to_screen(ent.x,ent.y)
       else
         spos = world_to_screen(0,0)
       end
@@ -457,10 +548,16 @@ function shoot_bullet(player)
     local new_bullet = {
       source = "player " .. player.username,
       x = player.x,
-      y = player.y
+      y = player.y,
+      flying = true,
     }
 
-    if player.shoot_target.type == "pos" then
+    if player.shoot_target.type == "entity" then
+      new_bullet.target = {
+        type = "entity",
+        name = player.shoot_target.name
+      }
+    elseif player.shoot_target.type == "pos" then
       new_bullet.target = {
         type = "pos",
         x = player.shoot_target.x,
@@ -528,15 +625,25 @@ end
 ----> Update bullet
 function update_bullet(bullet,tick)
   if bullet.target ~= nil then
-    if bullet.target.type == "pos" then
-      local new_pos = new_pos(bullet.x,bullet.y,bullet.target.x,bullet.target.y,BULLET_SPEED)
-      bullet.x = new_pos.x
-      bullet.y = new_pos.y
-      if new_pos.arrived then
-        bullet.target = nil
-      end
+    local p = nil
+    if bullet.target.type == "entity" then
+      local ent = get_entity(bullet.target.name)
+      p = new_pos(bullet.x,bullet.y,ent.x,ent.y,BULLET_SPEED)
+    elseif bullet.target.type == "pos" then
+      p = new_pos(bullet.x,bullet.y,bullet.target.x,bullet.target.y,BULLET_SPEED)
+    else return
+    end
+    bullet.x = p.x
+    bullet.y = p.y
+    if p.arrived then
+      bullet.flying = false
     end
   end
+end
+
+----> Resolve bullet
+function resolve_bullet(bullet)
+
 end
 
 ----> Update
@@ -551,8 +658,12 @@ function world_update()
     end
 
     local bullets = world.bullets
-    for _,bullet in pairs(bullets) do
+    for i,bullet in pairs(bullets) do
       update_bullet(bullet,world.tick)
+      if not bullet.flying then
+        resolve_bullet(bullet)
+        bullets[i] = nil
+      end
     end
   end
 end
@@ -573,13 +684,28 @@ function world_load(world_deets)
       })
     end
   end
+
+  local new_world_entities = {}
+  if world_deets.entities ~= nil then
+    for ename,edef in pairs(world_deets.entities) do
+      new_world_entities[ename] = {
+        sprite = edef.sprite,
+        visible = edef.visible,
+        isa = edef.isa,
+        x = edef.x,
+        y = edef.y,
+        w = edef.w,
+        h = edef.h
+      }
+    end
+  end
   
   local new_world = {
     tick = 0,
     deets = world_deets,
     players = {},
-    mobs = {},
     objects = new_world_objs,
+    entities = new_world_entities,
     bullets = {}
   }
   
@@ -642,11 +768,33 @@ end
 function set_shoot_target(username,x,y)
   if world ~= nil and world.players[username] ~= nil then
     local player = world.players[username]
-    player.shoot_target = {
-      type = "pos",
-      x = x,
-      y = y
-    }
+    
+    local closest = nil
+    local distance = nil
+    for ename,e in pairs(world.entities) do
+      local etype = Entities[e.isa]
+      if etype.targetable then
+        local d = euclid(x,y,e.x,e.y)
+        if closest == nil or d < distance then
+          closest = ename
+          distance = d
+        end
+      end
+    end
+
+    if closest ~= nil then
+      player.shoot_target = {
+        type = "entity",
+        name = closest
+      }
+    end
+  end
+end
+function clear_shoot_target(username)
+  if world ~= nil and world.players[username] ~= nil then
+    local player = world.players[username]
+
+    player.shoot_target = nil
   end
 end
 
@@ -826,10 +974,8 @@ function game_draw()
 end
 
 ----> Generic action
-function action_handler(key,pressed)
-  if pressed then
-    
-  end
+function action()
+
 end
 
 ----> Use ability
@@ -845,8 +991,9 @@ function register_key_handlers()
   for k,v in pairs(AbilityKey) do
     game_keyhandlers[k] = ability_handler
   end
-  game_keyhandlers["space"] = action_handler
+  game_keyhandlers["space"] = function(key,pressed) if pressed then action() end end
   game_keyhandlers["f"] = function(key,pressed) if pressed then toggle_shooting(DEFAULT_USERNAME) end end
+  game_keyhandlers["c"] = function(key,pressed) if pressed then clear_shoot_target(DEFAULT_USERNAME) end end
 end
 
 ----> Key handler
