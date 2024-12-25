@@ -1495,7 +1495,7 @@ end
 ----> Update
 function love.update()
   if view == View.INIT then
-    view = View.MENU
+    view = View.GAME
   elseif view == View.GAME then
     game_update()
   end
