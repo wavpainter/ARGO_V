@@ -68,6 +68,7 @@ local Abilities = {
   [8] = "reflect",
   [9] = "stun",
   [10] = "pull",
+  [11] = "stab"
 }
 local Images = {
   ["bin"] = "bin.png",
@@ -86,7 +87,8 @@ local Images = {
   ["jason"] = "jason.png",
   ["target"] = "target.png",
   ["dummy"] = "dummy.png",
-  ["skeleton"] = "skeleton.png"
+  ["skeleton"] = "skeleton.png",
+  ["stab"] = "stab.png"
 }
 local Entities = {
   ["dummy"] = {
@@ -104,12 +106,8 @@ local Entities = {
     hp = 100,
     drops = {
       {
-        name = "ability cantrip",
-        rate = 0.5
-      },
-      {
-        name = "ability negate",
-        rate = 0.5
+        name = "ability stab",
+        rate = 1
       }
     }
   }
@@ -164,28 +162,50 @@ local DEFAULT_WORLD = {
 }
 local DEFAULT_PLAYER = {
   abilities = {
-    [1] = "invis",
-    [2] = "beam",
-    [3] = "cantrip",
-    [4] = "root",
-    [5] = "negate",
-    [6] = "push",
-    [7] = "rage",
-    [8] = "reflect",
-    [9] = "stun",
-    [10] = "pull"
-  },
-  learned_abilities = {
-    "invis",
-    "beam",
-    "cantrip",
-    "root",
-    "negate",
-    "push",
-    "rage",
-    "reflect",
-    "stun",
-    "pull"
+    ["invis"] = {
+      times_used = 0,
+      slot = 1,
+    },
+    ["beam"] = {
+      times_used = 0,
+      slot = 2,
+    },
+    ["cantrip"] = {
+      times_used = 0,
+      slot = 3,
+    },
+    ["root"] = {
+      times_used = 0,
+      slot = 4,
+    },
+    ["negate"] = {
+      times_used = 0,
+      slot = 5,
+    },
+    ["push"] = {
+      times_used = 0,
+      slot = 6,
+    },
+    ["rage"] = {
+      times_used = 0,
+      slot = 7
+    },
+    ["reflect"] = {
+      times_used = 0,
+      slot = 8
+    },
+    ["stun"] = {
+      times_used = 0,
+      slot = 9
+    },
+    ["pull"] = {
+      times_used = 0,
+      slot = 10
+    },
+    ["stab"] = {
+      times_used = 0,
+      slot = -1
+    },
   },
   avatar = "jason",
   shoot_speed = 4,
@@ -365,35 +385,6 @@ function log_error(message)
 end
 
 
-function save_world_to(savename)
-  if world ~= nil then
-    local encoded = json.encode(get_world_deets())
-    local f = love.filesystem.newFile(savename .. ".json")
-    f:open("w")
-    f:write(encoded)
-    f:close()
-
-    log_info("Saved to " .. savename)
-  else
-    log_warning("Cannot save, no world loaded")
-  end
-end
-
-function load_world_from(savename)
-  local savefile = savename .. ".json"
-  local f_details = love.filesystem.getInfo(savefile)
-  if f_details == nil then
-    log_warning("No save file called " .. savefile)
-    return
-  end
-  local f = love.filesystem.newFile(savefile)
-  f:open("r")
-  local encoded = f:read()
-  f:close()
-  local world_deets = json.decode(encoded)
-  world_load(world_deets)
-  world_join(DEFAULT_USERNAME)
-end
 
 --> STATE
 ----> Initialise
@@ -452,6 +443,38 @@ end
 function world_init()
   world = nil
   world_dbg_tick = nil
+end
+
+----> Serialize world to a file
+function save_world_to(savename)
+  if world ~= nil then
+    local encoded = json.encode(get_world_deets())
+    local f = love.filesystem.newFile(savename .. ".json")
+    f:open("w")
+    f:write(encoded)
+    f:close()
+
+    log_info("Saved to " .. savename)
+  else
+    log_warning("Cannot save, no world loaded")
+  end
+end
+
+----> Deserialize world and join
+function load_world_from(savename)
+  local savefile = savename .. ".json"
+  local f_details = love.filesystem.getInfo(savefile)
+  if f_details == nil then
+    log_warning("No save file called " .. savefile)
+    return
+  end
+  local f = love.filesystem.newFile(savefile)
+  f:open("r")
+  local encoded = f:read()
+  f:close()
+  local world_deets = json.decode(encoded)
+  world_load(world_deets)
+  world_join(DEFAULT_USERNAME)
 end
 
 ----> Draw backgroudn
@@ -687,7 +710,7 @@ function get_abilities(username)
   end
 
   local player = world.players[username]
-  return player.abilities
+  return player.ability_map
 end
 
 ----> Player uses ability
@@ -695,15 +718,11 @@ function use_ability(username,ability_num)
   if world ~= nil and world.players[username] ~= nil then
     player = world.players[username]
     
-    local ability_name = player.abilities[ability_num]
+    local ability_name = player.ability_map[ability_num]
+    player.abilities[ability_name].times_used = player.abilities[ability_name].times_used + 1 -- Lua moment
     local ability_index = ability_index_map[ability_name]
     log_info(username .. " used ability: " .. ability_name)
   end
-end
-
-----> Update bullet
-function update_bullet(bullet,tick)
-
 end
 
 ----> Create hit particle
@@ -743,7 +762,7 @@ function deal_entity_damage(ename,dmg)
       local players = world.players
       for name,player in pairs(players) do
         for _,drop in pairs(entitytype.drops) do
-          if math.random() > drop.rate then
+          if math.random() < drop.rate then
             table.insert(player.drops,{
               name = drop.name,
               x = ent.x + (0.5 - math.random()) * DROP_L / 2,
@@ -918,14 +937,33 @@ function world_load(world_deets)
   world = new_world
 end
 
+----> Get player deets
+function get_player_deets(username)
+  
+end
+
 ----> Join world
 function world_join(username)
   log_info(username .. " joined!")
   
+  local abils = {}
+  local abilmap = {}
+  for name,abil in pairs(DEFAULT_PLAYER.abilities) do
+    abils[name] = {
+      times_used = abil.times_used,
+      slot = abil.slot
+    }
+    if abil.slot ~= -1 then
+      abilmap[abil.slot] = name
+    end
+  end
+
+
   local spawn = world.spawn
   local new_player = {
     username = username,
-    abilities = DEFAULT_PLAYER.abilities,
+    abilities = abils,
+    ability_map = abilmap,
     avatar = DEFAULT_PLAYER.avatar,
     shoot_speed = DEFAULT_PLAYER.shoot_speed,
     damage = DEFAULT_PLAYER.damage,
