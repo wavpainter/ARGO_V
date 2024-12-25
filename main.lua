@@ -85,25 +85,36 @@ local Images = {
   ["pull"] = "pull.png",
   ["jason"] = "jason.png",
   ["target"] = "target.png",
-  ["dummy"] = "dummy.png"
-}
-local GameUI = {
-  "spells",
+  ["dummy"] = "dummy.png",
+  ["skeleton"] = "skeleton.png"
 }
 local Entities = {
   ["dummy"] = {
     targetable = "true",
-    hp = 987654321
+    hp = 987654321,
+    drops = {
+      {
+        name = "ability cantrip",
+        rate = 1
+      }
+    }
+  },
+  ["skeleton"] = {
+    targetable = "true",
+    hp = 100,
+    drops = {
+      {
+        name = "ability cantrip",
+        rate = 0.5
+      },
+      {
+        name = "ability negate",
+        rate = 0.5
+      }
+    }
   }
 }
-local Spells = {
-  MARGIN_X = 10,
-  MARGIN_Y = 10,
-  ITEM_WIDTH = 60,
-  DIVISION = 10,
-}
 local DEFAULT_WORLD = {
-  boundaries = { x1 = -10000, x2 = 10000, y1 = -10000, y2 = 10000 },
   spawn = {x = 0, y = 0 },
   background = "tiles lightgrey white 100 100",
   entities = {
@@ -124,6 +135,15 @@ local DEFAULT_WORLD = {
       y = -200,
       w = 80,
       h = 80
+    },
+    ["skele1"] = {
+      sprite = "skeleton",
+      visible = "true",
+      isa = "skeleton",
+      x = 200,
+      y = -200,
+      w = 80,
+      h = 160
     }
   },
   objects = { {
@@ -155,6 +175,18 @@ local DEFAULT_PLAYER = {
     [9] = "stun",
     [10] = "pull"
   },
+  learned_abilities = {
+    "invis",
+    "beam",
+    "cantrip",
+    "root",
+    "negate",
+    "push",
+    "rage",
+    "reflect",
+    "stun",
+    "pull"
+  },
   avatar = "jason",
   shoot_speed = 4,
   damage = 10
@@ -162,9 +194,11 @@ local DEFAULT_PLAYER = {
 local DEFAULT_USERNAME = "jason"
 local MOVE_DELAY_S = 0.15
 local PLAYER_L = 75
+local DROP_L = 40
 local MOVE_SPEED = 1000
 local BULLET_SPEED = 1500
 local BULLET_RADIUS = 10
+local INTERACT_DIST = 100
 
 --> VARIABLES
 ----> State
@@ -333,7 +367,7 @@ end
 
 function save_world_to(savename)
   if world ~= nil then
-    local encoded = json.encode(world.deets)
+    local encoded = json.encode(get_world_deets())
     local f = love.filesystem.newFile(savename .. ".json")
     f:open("w")
     f:write(encoded)
@@ -468,7 +502,7 @@ end
 function world_draw()
   local player = world.players[DEFAULT_USERNAME]
   local sc = screen_coords(player.x,player.y)
-  local bg = world.deets.background
+  local bg = world.background
   
   if bg ~= nil then
     draw_background(bg,sc)
@@ -481,58 +515,86 @@ function world_draw()
     local xscale = o.w / img.w
     local yscale = o.h / img.h
     love.graphics.setColor(1,1,1)
-    love.graphics.draw(img.img, pos.x-o.w/2,pos.y-o.h/2,0,xscale,yscale)
+    love.graphics.draw(img.img, pos.x-o.w/2,pos.y-o.h,0,xscale,yscale)
   end
 
   local entities = world.entities
   for ename,e in pairs(entities) do
     if e.visible then
-      local entity = Entities[e.isa]
+      -- Entity image
+      local entity = Entities[e.isa] 
       local pos = world_to_screen(e.x,e.y)
       local img = get_image(e.sprite)
       local xscale = e.w / img.w
       local yscale = e.h / img.h
       love.graphics.setColor(1,1,1)
-      love.graphics.draw(img.img,pos.x-e.w/2,pos.y-e.h/2,0,xscale,yscale)
+      love.graphics.draw(img.img,pos.x-e.w/2,pos.y-e.h,0,xscale,yscale)
 
       if entity.targetable then
         love.graphics.setColor(1,triangle(0.5),0)
-        love.graphics.rectangle("line",pos.x-e.w/2-5,pos.y-e.h/2-5,e.w+10,e.h+10)
+        love.graphics.rectangle("line",pos.x-e.w/2-5,pos.y-e.h-5,e.w+10,e.h+10)
       end
 
+      -- Entity HP bar
       local hpw = 80
       local hph = 10
       love.graphics.setColor(0,0,0)
-      love.graphics.rectangle("fill",pos.x - hpw/2,pos.y + e.h/2 + hph,hpw,hph)
+      love.graphics.rectangle("fill",pos.x - hpw/2,pos.y + hph,hpw,hph)
       local hpv = (e.hp / entity.hp) * hpw
       love.graphics.setColor(0,1,0)
-      love.graphics.rectangle("fill",pos.x - hpw/2,pos.y + e.h/2 + hph,hpv,hph)
+      love.graphics.rectangle("fill",pos.x - hpw/2,pos.y + hph,hpv,hph)
 
     end
   end
 
   local players = world.players
   for username,p in pairs(players) do
+    -- Move target
     if username == DEFAULT_USERNAME and p.move_target ~= nil then
       local tpos = world_to_screen(p.move_target.x,p.move_target.y)
       love.graphics.setColor(0,1,0)
       love.graphics.circle("fill",tpos.x,tpos.y,PLAYER_L/8)
     end
 
+    -- Player drops
+    for _,drop in pairs(p.drops) do
+      local parts = split_spaces(drop.name)
+      local pos = world_to_screen(drop.x,drop.y)
+      if parts[1] == "ability" then
+        local img = get_image(parts[2])
+        local xscale = DROP_L / img.w
+        local yscale = DROP_L / img.h
+        love.graphics.setColor(1,1,1)
+        love.graphics.draw(img.img,pos.x-DROP_L/2,pos.y- DROP_L/2,0,xscale,yscale)
+
+        love.graphics.setColor(0.615,0,1)
+        love.graphics.rectangle("line",pos.x-DROP_L/2,pos.y - DROP_L/2,DROP_L,DROP_L)
+      end
+    end
+
+    -- Player avatar
     local pos = world_to_screen(p.x,p.y)
     local img = get_image(p.avatar)
     local xscale = PLAYER_L / img.w
     local yscale = PLAYER_L / img.h
     love.graphics.setColor(1,1,1)
-    love.graphics.draw(img.img,pos.x - PLAYER_L/2,pos.y - PLAYER_L/2,0,xscale,yscale)
+    love.graphics.draw(img.img,pos.x - PLAYER_L/2,pos.y - PLAYER_L,0,xscale,yscale)
 
+    -- Player shoot target
     if username == DEFAULT_USERNAME and p.shoot_target ~= nil then
       local spos = nil
+      local wt = PLAYER_L
+      local ht = PLAYER_L
       if p.shoot_target.type == "pos" then
         spos = world_to_screen(p.shoot_target.x,p.shoot_target.y)
       elseif p.shoot_target.type == "entity" then
         local ent = get_entity(p.shoot_target.name)
+        if ent == nil then
+          goto notarget
+        end
         spos = world_to_screen(ent.x,ent.y)
+        wt = ent.w
+        ht = ent.h
       else
         spos = world_to_screen(0,0)
       end
@@ -540,8 +602,9 @@ function world_draw()
       local xscale = PLAYER_L / img.w / 2
       local yscale = PLAYER_L / img.h / 2
       love.graphics.setColor(1,1,1)
-      love.graphics.draw(img.img,spos.x - PLAYER_L / 4, spos.y - PLAYER_L/4,0,xscale,yscale)
+      love.graphics.draw(img.img,spos.x - PLAYER_L / 4, spos.y - PLAYER_L / 4 - ht / 2,0,xscale,yscale)
     end
+    ::notarget::
   end
 
   local bullets = world.bullets
@@ -563,6 +626,12 @@ function shoot_bullet(player)
     }
 
     if player.shoot_target.type == "entity" then
+      local ent = get_entity(player.shoot_target.name)
+      if ent == nil then
+        player.shoot_target = nil
+        return
+      end
+
       new_bullet.target = {
         type = "entity",
         name = player.shoot_target.name
@@ -634,21 +703,7 @@ end
 
 ----> Update bullet
 function update_bullet(bullet,tick)
-  if bullet.target ~= nil then
-    local p = nil
-    if bullet.target.type == "entity" then
-      local ent = get_entity(bullet.target.name)
-      p = new_pos(bullet.x,bullet.y,ent.x,ent.y,BULLET_SPEED)
-    elseif bullet.target.type == "pos" then
-      p = new_pos(bullet.x,bullet.y,bullet.target.x,bullet.target.y,BULLET_SPEED)
-    else return
-    end
-    bullet.x = p.x
-    bullet.y = p.y
-    if p.arrived then
-      bullet.flying = false
-    end
-  end
+
 end
 
 ----> Create hit particle
@@ -675,6 +730,35 @@ function create_hit_particle(damage,x,y,h)
   })
 end
 
+----> Deal entity damage
+function deal_entity_damage(ename,dmg)
+  local ent = get_entity(ename)
+
+  local entitytype = Entities[ent.isa]
+  ent.hp = ent.hp - dmg
+  
+  -- Die
+  if ent.hp <= 0 then
+    if entitytype.drops ~= nil then
+      local players = world.players
+      for name,player in pairs(players) do
+        for _,drop in pairs(entitytype.drops) do
+          if math.random() > drop.rate then
+            table.insert(player.drops,{
+              name = drop.name,
+              x = ent.x + (0.5 - math.random()) * DROP_L / 2,
+              y = ent.y + (0.5 - math.random()) * DROP_L / 2
+            })
+          end
+        end
+      end
+    end
+
+    -- Remove the entity
+    world.entities[ename] = nil
+  end
+end
+
 ----> Resolve bullet
 function resolve_bullet(bullet)
   -- Create hit particle
@@ -684,13 +768,16 @@ function resolve_bullet(bullet)
     if world.players[source_parts[2]] ~= nil then
       local player = world.players[source_parts[2]]
       local h = 50
+      local x = bullet.x
+      local y = bullet.y
       if bullet.target.type == "entity" then
         local ent = get_entity(bullet.target.name)
-        ent.hp = ent.hp - player.damage
+        deal_entity_damage(bullet.target.name,player.damage)
+        y = y
         h = ent.h/2 + 20
       end
 
-      create_hit_particle(player.damage,bullet.x,bullet.y,h)
+      create_hit_particle(player.damage,x,y,h)
     end
   end
 end
@@ -708,13 +795,77 @@ function world_update()
 
     local bullets = world.bullets
     for i,bullet in pairs(bullets) do
-      update_bullet(bullet,world.tick)
+
+      if bullet.target ~= nil then
+        local p = nil
+        if bullet.target.type == "entity" then
+          local ent = get_entity(bullet.target.name)
+          if ent == nil then
+            bullets[i] = nil
+            goto continue
+          end
+          p = new_pos(bullet.x,bullet.y,ent.x,ent.y-ent.h/2,BULLET_SPEED)
+        elseif bullet.target.type == "pos" then
+          p = new_pos(bullet.x,bullet.y,bullet.target.x,bullet.target.y,BULLET_SPEED)
+        else return
+        end
+        bullet.x = p.x
+        bullet.y = p.y
+        if p.arrived then
+          bullet.flying = false
+        end
+      end
+
       if not bullet.flying then
         resolve_bullet(bullet)
         bullets[i] = nil
       end
+      ::continue::
     end
   end
+end
+
+----> Get world deets
+function get_world_deets()
+  if world == nil then return nil end
+
+
+
+  local world_objs = {}
+  for _,o in pairs(world.objects) do
+    table.insert(world_objs, {
+      sprite = o.sprite,
+      x = o.x,
+      y = o.y,
+      w = o.w,
+      h = o.h
+    })
+  end
+
+  local world_ents = {}
+  for _,e in pairs(world.entities) do
+    table.insert(world_ents, {
+      sprite = e.sprite,
+      visible = e.visible,
+      isa = e.isa,
+      x = e.x,
+      y = e.y,
+      w = e.w,
+      h = e.h
+    })
+  end
+
+  local world_deets = {
+    spawn = {
+      x = world.spawn.x,
+      y = world.spawn.y,
+    },
+    background = world.background,
+    entities = world_ents,
+    objects = world_objs
+  }
+
+  return world_deets
 end
 
 ----> Load world
@@ -753,7 +904,11 @@ function world_load(world_deets)
   
   local new_world = {
     tick = 0,
-    deets = world_deets,
+    spawn = {
+      x = world_deets.spawn.x,
+      y = world_deets.spawn.y,
+    },
+    background = world_deets.background,
     players = {},
     objects = new_world_objs,
     entities = new_world_entities,
@@ -767,13 +922,14 @@ end
 function world_join(username)
   log_info(username .. " joined!")
   
-  local spawn = world.deets.spawn
+  local spawn = world.spawn
   local new_player = {
     username = username,
     abilities = DEFAULT_PLAYER.abilities,
     avatar = DEFAULT_PLAYER.avatar,
     shoot_speed = DEFAULT_PLAYER.shoot_speed,
     damage = DEFAULT_PLAYER.damage,
+    drops = {},
     x = spawn.x,
     y = spawn.y,
     move_target = nil,
@@ -825,7 +981,7 @@ function set_shoot_target(username,x,y)
     local distance = nil
     for ename,e in pairs(world.entities) do
       local etype = Entities[e.isa]
-      if etype.targetable then
+      if etype.targetable and e.hp > 0 then
         local d = euclid(x,y,e.x,e.y)
         if closest == nil or d < distance then
           closest = ename
@@ -1037,7 +1193,6 @@ function game_draw_particles()
 
     n = n + 1
   end
-  log_info(tostring(n) .. " particles")
 end
 
 ----> Draw
@@ -1053,7 +1208,31 @@ end
 
 ----> Generic action
 function action()
+  if world ~= nil and world.players[DEFAULT_USERNAME] ~= nil then
+    local player = world.players[DEFAULT_USERNAME]
+    local closest = nil
+    local dist = nil
+    if player.drops ~= nil then
+      for i,drop in pairs(player.drops) do
+        local ddrop = euclid(player.x,player.y,drop.x,drop.y)
+        if ddrop < INTERACT_DIST and (closest == nil or ddrop < dist) then
+          closest = "drop " .. tostring(i)
+          dist = ddrop
+        end
+      end
+    end
 
+    if closest ~= nil then
+      local parts = split_spaces(closest)
+
+      -- Pick up drop
+      if parts[1] == "drop" then
+        local i = tonumber(parts[2])
+        local drop = player.drops[i]
+        player.drops[i] = nil
+      end
+    end
+  end
 end
 
 ----> Use ability
