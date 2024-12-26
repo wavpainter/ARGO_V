@@ -58,17 +58,94 @@ local AbilityKey = {
   ["t"] = 10,
 }
 local Abilities = {
-  [1] = "invis",
-  [2] = "beam",
-  [3] = "cantrip",
-  [4] = "root",
-  [5] = "negate",
-  [6] = "push",
-  [7] = "rage",
-  [8] = "reflect",
-  [9] = "stun",
-  [10] = "pull",
-  [11] = "stab"
+  ["invis"] = {
+    index = 1,
+    description = "Turn invisible",
+    interrupt = false,
+    target = false,
+    channel = false,
+    stationary = false,
+  },
+  ["beam"] = {
+    index = 2,
+    description = "",
+    interrupt = false,
+    target = true,
+    channel = true,
+    stationary = true,
+  },
+  ["cantrip"] = {
+    index = 3,
+    description = "Unlock another random ability",
+    interrupt = false,
+    target = false,
+    channel = false,
+    stationary = false,
+  },
+  ["root"] = {
+    index = 4,
+    description = "",
+    interrupt = true,
+    target = true,
+    channel = false,
+    stationary = false
+  },
+  ["negate"] = {
+    index = 5,
+    description = "",
+    interrupt = false,
+    target = true,
+    channel = false,
+    stationary = false
+  },
+  ["push"] = {
+    index = 6,
+    description = "",
+    interrupt = true,
+    target = true,
+    channel = false,
+    stationary = true
+  },
+  ["rage"] = {
+    index = 7,
+    description = "",
+    interrupt = false,
+    target = false,
+    channel = false,
+    stationary = false
+  },
+  ["reflect"] = {
+    index = 8,
+    description = "",
+    interrupt = false,
+    target = false,
+    channel = false,
+    stationary = false
+  },
+  ["stun"] = {
+    index = 9,
+    description = "",
+    interrupt = true,
+    target = true,
+    channel = false,
+    stationary = false
+  },
+  ["pull"] = {
+    index = 10,
+    description = "",
+    interrupt = true,
+    target = true,
+    channel = false,
+    stationary = true
+  },
+  ["stab"] = {
+    index = 11,
+    description = "",
+    interrupt = false,
+    target = true,
+    channel = false,
+    stationary = false
+  }
 }
 local Images = {
   ["bin"] = "bin.png",
@@ -263,7 +340,7 @@ local UI_ABILITY_LEN = 80
 local UI_ABILITY_MARGIN = 8
 local UI_ABILITY_ICON_LEN = 60
 local UI_ABILITY_ICON_MARGIN = 6
-local UI_ABILITYBOOK_TITLE = 20
+local UI_ABILITYBOOK_HEADER = 20
 local UI_ABILITYBOOK_MARGIN = 10
 
 --> VARIABLES
@@ -288,7 +365,6 @@ local world = nil
 local world_dbg_tick = nil
 
 ----> Game
-local ability_index_map = nil
 local game_keyhandlers = nil
 local clicking = nil
 local last_move_s = nil
@@ -425,10 +501,12 @@ function ui_add_game()
   ui["abilities_book"] = {
     visible = false,
     anchor = Anchor.CENTRE,
+    selected = nil,
+    learning = false,
     x_off = 0,
     y_off = 0,
     w = (UI_ABILITYBOOK_MARGIN + UI_ABILITYBOOK_MARGIN/2 + UI_ABILITY_ICON_LEN * 5 + UI_ABILITY_ICON_MARGIN * 4 + UI_ABILITYBOOK_MARGIN) * 2,
-    h = UI_ABILITYBOOK_MARGIN*3 + UI_ABILITY_ICON_LEN * 2 + UI_ABILITY_ICON_MARGIN + UI_ABILITY_ICON_LEN * 10 + UI_ABILITY_ICON_MARGIN * 9
+    h = UI_ABILITYBOOK_MARGIN*3 + UI_ABILITYBOOK_HEADER * 2 + UI_ABILITY_ICON_LEN * 2 + UI_ABILITY_ICON_MARGIN + UI_ABILITY_ICON_LEN * 10 + UI_ABILITY_ICON_MARGIN * 9
   }
 end
 
@@ -890,7 +968,6 @@ function use_ability(username,ability_num)
     
     local ability_name = player.ability_map[ability_num]
     player.abilities[ability_name].times_used = player.abilities[ability_name].times_used + 1 -- Lua moment
-    local ability_index = ability_index_map[ability_name]
     log_info(username .. " used ability: " .. ability_name)
   end
 end
@@ -1287,10 +1364,6 @@ end
 ----> Initialise
 function game_init()
   game_keyhandlers = {}
-  ability_index_map = {}
-  for k,v in pairs(Abilities) do
-    ability_index_map[v] = k
-  end
   clicking = false
   last_move_s = love.timer.getTime()
   game_dbg_pos = nil
@@ -1447,12 +1520,14 @@ function game_keyhandler(key,pressed)
   end
 end
 
-----> Mouse handler
-function game_mousehandler(x,y,button,pressed)
-  if not pressed and button == 1 then
+function game_mouse_released(button)
+  if button == 1 then
     clicking = false
   end
+end
 
+----> Mouse handler
+function game_mousehandler(x,y,button,pressed)
   if pressed then
     if button == 1 then
       move_char()
@@ -1526,12 +1601,43 @@ function ui_draw_abilities()
   end
 end
 
+function ui_divide_abilities_book()
+  local uidef = ui["abilities_book"]
+  if uidef == nil then return end
+
+  local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
+
+  local bm = UI_ABILITYBOOK_MARGIN
+  local bh = UI_ABILITYBOOK_HEADER
+  local il = UI_ABILITY_ICON_LEN
+  local im = UI_ABILITY_ICON_MARGIN
+
+  local divs = {}
+  divs.x_left_margin = p0.x + bm/2
+  divs.x_learned = divs.x_left_margin + bm / 2
+  divs.x_centre_margin = p0.x + bm * 3 /2 + 5 * il + 4 * im
+  divs.x_ability_info = divs.x_centre_margin + bm/2
+  divs.x_right_margin = p0.x + uidef.w - bm/2
+  
+  divs.y_top_margin = p0.y + bm/2
+  divs.y_learned_title = divs.y_top_margin + bm/2
+  divs.y_learned = divs.y_learned_title + bh
+  divs.y_learned_known_margin = divs.y_learned + il*2 + im + bm/2
+  divs.y_known_title = divs.y_learned_known_margin + bm/2
+  divs.y_known = divs.y_known_title + bh
+  divs.y_bottom_margin = p0.y + uidef.h - bm/2
+
+  return divs
+end
+
 ----> Draw the abilities book
 function ui_draw_abilities_book()
   local uidef = ui["abilities_book"]
   if uidef == nil then return end
 
   local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
+
+  local divs = ui_divide_abilities_book()
 
   local player = world.players[DEFAULT_USERNAME]
   local ability_map = player.ability_map
@@ -1541,43 +1647,80 @@ function ui_draw_abilities_book()
   love.graphics.rectangle("fill",p0.x,p0.y,uidef.w,uidef.h)
 
   local bm = UI_ABILITYBOOK_MARGIN
+  local bh = UI_ABILITYBOOK_HEADER
   local il = UI_ABILITY_ICON_LEN
   local im = UI_ABILITY_ICON_MARGIN
 
   -- Draw outline
-  local x1 = p0.x + bm/2
-  local x2 = p0.x + uidef.w - bm/2
-  local y1 = p0.y + bm/2
-  local y2 = p0.y + uidef.h - bm/2
-  local xc = p0.x + bm * 3 /2 + 5 * il + 4 * im
-  local yc = p0.y + bm * 3 /2 + 2 * il + im
   love.graphics.setColor(1,1,1)
-  love.graphics.line(x1,y1,x2,y1)
-  love.graphics.line(x1,y1,x1,y2)
-  love.graphics.line(x2,y1,x2,y2)
-  love.graphics.line(x1,y2,x2,y2)
-  love.graphics.line(xc,y1,xc,y2)
-  love.graphics.line(x1,yc,xc,yc)
+  love.graphics.line(divs.x_left_margin,divs.y_top_margin,divs.x_left_margin,divs.y_bottom_margin) -- Left margin
+  love.graphics.line(divs.x_left_margin,divs.y_top_margin,divs.x_right_margin,divs.y_top_margin) -- Top margin
+  love.graphics.line(divs.x_right_margin,divs.y_top_margin,divs.x_right_margin,divs.y_bottom_margin) -- Right margin
+  love.graphics.line(divs.x_left_margin,divs.y_bottom_margin,divs.x_right_margin,divs.y_bottom_margin) -- Bottom margin
+  love.graphics.line(divs.x_centre_margin,divs.y_top_margin,divs.x_centre_margin,divs.y_bottom_margin) -- Centre margin
+  love.graphics.line(divs.x_left_margin,divs.y_learned_known_margin,divs.x_centre_margin,divs.y_learned_known_margin) -- Learned-known margin
 
   -- Draw learned abilities
-  local dx = bm
-  local dy = bm
+  love.graphics.setColor(1,1,1)
+  love.graphics.print("Learned",divs.x_learned,divs.y_learned_title)
+
+  local x = divs.x_learned
+  local y = divs.y_learned
   for i = 1,10 do
     local ability_img = get_image(ability_map[i])
     local xscale = il / ability_img.w
     local yscale = il / ability_img.h
     love.graphics.setColor(1,1,1)
-    love.graphics.draw(ability_img.img,p0.x + dx,p0.y + dy,0,xscale,yscale)
-    dx = dx + il + im
+    love.graphics.draw(ability_img.img,x,y,0,xscale,yscale)
+    if uidef.learning then
+      love.grahics.setColor(1,1,0,0.25)
+      love.graphics.rectangle("fill",x,y,il,il)
+    end
+    x = x + il + im
     if i == 5 then
-      dx = bm
-      dy = dy + il + im
+      x = divs.x_learned
+      y = y + il + im
     end
   end
 
   -- Draw known abilities
+  love.graphics.setColor(1,1,1)
+  love.graphics.print("Known",p0.x + bm,p0.y + bh + bm * 2 + il * 2 + im)
+
+  love.graphics.setColor(1,1,0)
+  love.graphics.circle("fill",p0.x + bm,p0.y + bh + bm * 2 + il * 2 + im + bh/2 - 2,4)
+
   local dx = bm
-  local dy = bm * 2 + il * 2 + im
+  local dy = bm * 2 + il * 2 + im + bh * 2
+  local i = 1
+  for aname,ability in pairs(abilities) do
+    local ability_img = get_image(aname)
+    local xscale = il / ability_img.w
+    local yscale = il / ability_img.h
+    love.graphics.setColor(1,1,1)
+    love.graphics.draw(ability_img.img,p0.x + dx,p0.y + dy,0,xscale,yscale)
+
+    if ability.times_used == 0 then
+      love.graphics.setColor(1,1,0)
+      love.graphics.circle("fill",p0.x+dx+5,p0.y+dy+5,4)
+    end
+
+    if ability.slot ~= -1 then
+      love.graphics.setColor(0,1,0)
+      love.graphics.rectangle("line",p0.x + dx-1,p0.y + dy-1,il+2,il+2)
+    end
+    
+    dx = dx + il + im
+
+    if i % 5 == 0 then
+      dx = bm
+      dy = dy + il + im
+    end
+    i = i + 1
+  end
+
+  -- Draw selected ability
+  
 end
 
 ----> Draw
@@ -1622,13 +1765,39 @@ function ui_mousehandler_abilities(x,y,button,pressed)
   return false
 end
 
+----> Abilties book mouse click
+function ui_mousehandler_abilities_book(x,y,button,pressed)
+  local uidef = ui["abilities_book"]
+  if uidef == nil then return end
+
+  local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
+
+  if x < p0.x or x > (p0.x + uidef.w) or y < p0.y or y > (p0.y + uidef.h) then
+    return false
+  end
+
+  local player = world.players[DEFAULT_USERNAME]
+  local ability_map = player.ability_map
+  local abilities = player.abilities
+
+  return true
+end
+
 ----> Mousehandler
 function ui_mousehandler(x,y,button,pressed)
-  if ui["abilities"] ~= nil then
+  if ui["abilities_book"] ~= nil and ui["abilities_book"].visible then
+    if ui_mousehandler_abilities_book(x,y,button,pressed) then
+      return true
+    end
+  end
+
+  if ui["abilities"] ~= nil and ui["abilities"].visible then
     if ui_mousehandler_abilities(x,y,button,pressed) then
       return true
     end
   end
+
+  return false
 end
 
 function ui_keyhandler(key,pressed)
@@ -1763,7 +1932,7 @@ end
 
 ----> Capturing debug mous handler
 function debug_mousehandler(x,y,button,pressed)
-  
+  return true
 end
 
 --> LOVE
@@ -1834,62 +2003,52 @@ function keyrouter(key,pressed)
   
   -- Capture debug
   if debug == Debug.CAPTURING then
-    return debug_keyhandler(key,pressed)
+    if debug_keyhandler(key,pressed) then return true end
   end
   
   -- Route to view
   if view == View.MENU then
-    return menu_keyhandler(key,pressed)
+    if menu_keyhandler(key,pressed) then return true end
   elseif view == View.GAME then
-    return game_keyhandler(key,pressed)
+    if game_keyhandler(key,pressed) then return true end
   end
 end
 
 ----> Key pressed
 function love.keypressed(key, scancode, isrepeat)
-  key_release_callbacks[key] = keyrouter(key,true)
+  keyrouter(key,true)
 end
 
 ----> Key released
 function love.keyreleased(key, scancode, isrepeat)
   keyrouter(key,false)
-  
-  if key_release_callbacks[key] ~= nil then
-    key_release_callbacks[key]()
-    key_release_callbacks[key] = nil
-  end
 end
 
 ----> Mouse router
 function mouserouter(x,y,button,pressed)
+  game_mouse_released(button)
+
   -- Capture debug
   if debug == Debug.CAPTURING then
-    return debug_mousehandler(x,y,button,pressed)
+    if debug_mousehandler(x,y,button,pressed) then return true end
   end
 
   -- UI
-  if ui_mousehandler(x,y,button,pressed) then
-    return
-  end
+  if ui_mousehandler(x,y,button,pressed) then return true end
   
   -- Route to view
   if view == View.MENU then
-    return menu_mousehandler(x,y,button,pressed)
+    if menu_mousehandler(x,y,button,pressed) then return true end
   elseif view == View.GAME then
-    return game_mousehandler(x,y,button,pressed)
+    if game_mousehandler(x,y,button,pressed) then return true end
   end
 end
 
 ----> Mousepressed
 function love.mousepressed(x, y, button, istouch, presses)
-  mouse_release_callbacks[button] = mouserouter(x,y,button,true)
+ mouserouter(x,y,button,true)
 end
 
 function love.mousereleased(x, y, button, istouch, presses)
   mouserouter(x,y,button,false)
-  
-  if mouse_release_callbacks[button] ~= nil then
-    mouse_release_callbacks[button]()
-    mouse_release_callbacks[button] = nil
-  end
 end
