@@ -382,9 +382,12 @@ function get_anchor_point(anchor,x_off,y_off,w,h)
   local sw = love.graphics.getWidth()
   local sh = love.graphics.getHeight()
 
+  if x_off == nil then x_off = 0 end
+  if y_off == nil then y_off = 0 end
+
   -- X anchor
   local ax = x_off
-  if anchor == Anchor.TOP or anchor == Anchor.CENTRE or anchor == anchor.BOTTOM then
+  if anchor == Anchor.TOP or anchor == Anchor.CENTRE or anchor == Anchor.BOTTOM then
     ax = ax + sw / 2 - w / 2
   elseif anchor == Anchor.RIGHT or anchor == Anchor.TOP_RIGHT or anchor == Anchor.BOTTOM_RIGHT then
     ax = ax + sw - w
@@ -403,6 +406,34 @@ function get_anchor_point(anchor,x_off,y_off,w,h)
     y = ay
   }
 end
+
+----> Add game UI
+function ui_add_game()
+  ui["abilities"] = {
+    visible = true,
+    anchor = Anchor.BOTTOM_LEFT,
+    x_off = 10,
+    y_off = -10,
+    w = UI_ABILITY_LEN * 5 + UI_ABILITY_MARGIN * 4,
+    h = UI_ABILITY_LEN * 2 + UI_ABILITY_MARGIN
+  }
+
+  ui["abilities_book"] = {
+    visible = false,
+    anchor = Anchor.CENTRE,
+    x_off = 0,
+    y_off = 0,
+    h = 300,
+    w = 300
+  }
+end
+
+----> Remove game UI
+function ui_remove_game()
+  ui["abilities"] = nil
+  ui["abilities_book"] = nil
+end
+
 
 ----> Log information
 function log_info(message)
@@ -544,6 +575,8 @@ function load_world_from(savename)
   local world_deets = json.decode(encoded)
   world_load(world_deets)
   world_join(DEFAULT_USERNAME)
+  view = View.GAME
+  ui_add_game()
 end
 
 ----> Draw backgroudn
@@ -959,9 +992,11 @@ function interact(username,layer,objname)
     local obj = world.objects[layer][objname]
 
     if obj.isa ~= nil then
-      local objtype = Objects[obj.isa]
-
-      log_info("Interacted with a " .. obj.isa)
+      if obj.isa == "lectern" then
+        if ui["abilities_book"] ~= nil then
+          ui["abilities_book"].visible = true
+        end
+      end
     end
   end
 end
@@ -1282,6 +1317,7 @@ function game_update()
   if world == nil then
     world_load(DEFAULT_WORLD)
     world_join(DEFAULT_USERNAME)
+    ui_add_game()
   end
   
   if clicking and t - last_move_s > MOVE_DELAY_S then
@@ -1291,10 +1327,6 @@ function game_update()
   
   world_update()
 end
-
-
-
-
 
 ----> Draw particles
 function game_draw_particles()
@@ -1447,27 +1479,9 @@ function ui_init()
   ui = {}
 end
 
-----> Add game UI
-function ui_add_game()
-  ui["abilities"] = {
-    visible = true,
-    anchor = Anchor.BOTTOM_LEFT,
-    x_off = 10,
-    y_off = -10,
-    w = UI_ABILITY_LEN * 5 + UI_ABILITY_MARGIN * 4,
-    h = UI_ABILITY_LEN * 2 + UI_ABILITY_MARGIN
-  }
-end
-
-----> Remove game UI
-function ui_remove_game()
-  ui["abilities"] = nil
-end
 
 ----> Draw the abilities bar
 function ui_draw_abilities()
-  local w = love.graphics.getWidth()
-  local h = love.graphics.getHeight()
 
   local uidef = ui["abilities"]
   if uidef == nil then return end
@@ -1517,10 +1531,25 @@ function ui_draw_abilities()
   end
 end
 
+----> Draw the abilities book
+function ui_draw_abilities_book()
+  local uidef = ui["abilities_book"]
+  if uidef == nil then return end
+
+  local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
+
+  love.graphics.setColor(1,0,0)
+  love.graphics.rectangle("line",p0.x,p0.y,uidef.w,uidef.h)
+end
+
 ----> Draw
 function ui_draw()
-  if ui["abilities"] ~= nil then
+  if ui["abilities"] ~= nil and ui["abilities"].visible then
     ui_draw_abilities()
+  end
+
+  if ui["abilities_book"] ~= nil and ui["abilities_book"].visible then
+    ui_draw_abilities_book()
   end
 end
 
@@ -1740,7 +1769,6 @@ end
 function love.update()
   if view == View.INIT then
     view = View.GAME
-    ui_add_game()
   elseif view == View.GAME then
     game_update()
   end
