@@ -88,7 +88,8 @@ local Images = {
   ["target"] = "target.png",
   ["dummy"] = "dummy.png",
   ["skeleton"] = "skeleton.png",
-  ["stab"] = "stab.png"
+  ["stab"] = "stab.png",
+  ["lectern"] = "lectern.png"
 }
 local Entities = {
   ["dummy"] = {
@@ -110,6 +111,11 @@ local Entities = {
         rate = 1
       }
     }
+  }
+}
+local Objects = {
+  ["lectern"] = {
+    interactable = "true"
   }
 }
 local DEFAULT_WORLD = {
@@ -144,20 +150,41 @@ local DEFAULT_WORLD = {
       h = 160
     }
   },
-  objects = { {
-    sprite = "bin",
-    x = 200,
-    y = 200,
-    w = 100,
-    h = 100
-  },
-  {
-    sprite = "love",
-    x = 1000,
-    y = 1000,
-    w = 100,
-    h = 100
-  }
+  objects = { 
+    ["above"] = {},
+    ["below"] = {
+      ["bin1"] = {
+        sprite = "bin",
+        x = 200,
+        y = 200,
+        w = 100,
+        h = 100
+      },
+      ["bin2"] = {
+        sprite = "bin",
+        x = 200,
+        y = 400,
+        w = 100,
+        h = 100
+      },
+    },
+    ["collide"] = {
+      ["love1"] = {
+        sprite = "love",
+        x = 1000,
+        y = 1000,
+        w = 100,
+        h = 100
+      },
+      ["lectern1"] = {
+        sprite = "lectern",
+        isa = "lectern",
+        x = 600,
+        y = 1000,
+        w = 100,
+        h = 100
+      }
+    }
  }
 }
 local DEFAULT_PLAYER = {
@@ -220,6 +247,21 @@ local BULLET_SPEED = 1500
 local BULLET_RADIUS = 10
 local INTERACT_DIST = 100
 
+----> UI
+local Anchor = {
+  RIGHT = "r",
+  BOTTOM_RIGHT = "br",
+  BOTTOM = "b",
+  BOTTOM_LEFT = "bl",
+  LEFT = "l",
+  TOP_LEFT = "tl",
+  TOP = "t",
+  TOP_RIGHT = "tr",
+  CENTRE = "c"
+}
+local UI_ABILITY_LEN = 80
+local UI_ABILITY_MARGIN = 8
+
 --> VARIABLES
 ----> State
 local view = nil
@@ -248,6 +290,9 @@ local clicking = nil
 local last_move_s = nil
 local game_dbg_pos = nil
 local particles = nil
+
+----> UI
+local ui = nil
 
 ----> LOVE
 local key_release_callbacks = nil
@@ -333,6 +378,32 @@ function euclid(x1,y1,x2,y2)
   return math.sqrt((x1 - x2) ^2 + (y1 - y2) ^2)
 end
 
+function get_anchor_point(anchor,x_off,y_off,w,h)
+  local sw = love.graphics.getWidth()
+  local sh = love.graphics.getHeight()
+
+  -- X anchor
+  local ax = x_off
+  if anchor == Anchor.TOP or anchor == Anchor.CENTRE or anchor == anchor.BOTTOM then
+    ax = ax + sw / 2 - w / 2
+  elseif anchor == Anchor.RIGHT or anchor == Anchor.TOP_RIGHT or anchor == Anchor.BOTTOM_RIGHT then
+    ax = ax + sw - w
+  end
+
+  -- Y anchor
+  local ay = y_off
+  if anchor == Anchor.LEFT or anchor == Anchor.CENTRE or anchor == Anchor.RIGHT then
+    ay = ay + sh / 2 - h / 2
+  elseif anchor == Anchor.BOTTOM_LEFT or anchor == Anchor.BOTTOM or anchor == Anchor.BOTTOM_RIGHT then
+    ay = ay + sh - h
+  end
+
+  return {
+    x = ax,
+    y = ay
+  }
+end
+
 ----> Log information
 function log_info(message)
   if message == nil then
@@ -383,8 +454,6 @@ function log_error(message)
   log_file:write(log_text(new_log) .. "\r\n")
   log_file:flush()
 end
-
-
 
 --> STATE
 ----> Initialise
@@ -521,6 +590,21 @@ function get_entity(name)
   end
 end
 
+function world_draw_objects(layername)
+  if world ~= nil and world.objects[layername] ~= nil then
+    local objs = world.objects[layername]
+
+    for _,o in pairs(objs) do
+      local pos = world_to_screen(o.x,o.y)
+      local img = get_image(o.sprite)
+      local xscale = o.w / img.w
+      local yscale = o.h / img.h
+      love.graphics.setColor(1,1,1)
+      love.graphics.draw(img.img, pos.x-o.w/2,pos.y-o.h/2,0,xscale,yscale)
+    end
+  end
+end
+
 ----> Draw
 function world_draw()
   local player = world.players[DEFAULT_USERNAME]
@@ -531,15 +615,9 @@ function world_draw()
     draw_background(bg,sc)
   end
 
-  local objs = world.objects
-  for _,o in pairs(objs) do
-    local pos = world_to_screen(o.x,o.y)
-    local img = get_image(o.sprite)
-    local xscale = o.w / img.w
-    local yscale = o.h / img.h
-    love.graphics.setColor(1,1,1)
-    love.graphics.draw(img.img, pos.x-o.w/2,pos.y-o.h,0,xscale,yscale)
-  end
+  world_draw_objects("below")
+
+  world_draw_objects("collide")
 
   local entities = world.entities
   for ename,e in pairs(entities) do
@@ -551,24 +629,25 @@ function world_draw()
       local xscale = e.w / img.w
       local yscale = e.h / img.h
       love.graphics.setColor(1,1,1)
-      love.graphics.draw(img.img,pos.x-e.w/2,pos.y-e.h,0,xscale,yscale)
+      love.graphics.draw(img.img,pos.x-e.w/2,pos.y-e.h/2,0,xscale,yscale)
 
       if entity.targetable then
         love.graphics.setColor(1,triangle(0.5),0)
-        love.graphics.rectangle("line",pos.x-e.w/2-5,pos.y-e.h-5,e.w+10,e.h+10)
+        love.graphics.rectangle("line",pos.x-e.w/2-5,pos.y-e.h/2-5,e.w+10,e.h+10)
       end
 
       -- Entity HP bar
       local hpw = 80
       local hph = 10
       love.graphics.setColor(0,0,0)
-      love.graphics.rectangle("fill",pos.x - hpw/2,pos.y + hph,hpw,hph)
+      love.graphics.rectangle("fill",pos.x - hpw/2,pos.y + e.h/2 + hph,hpw,hph)
       local hpv = (e.hp / entity.hp) * hpw
       love.graphics.setColor(0,1,0)
-      love.graphics.rectangle("fill",pos.x - hpw/2,pos.y + hph,hpv,hph)
+      love.graphics.rectangle("fill",pos.x - hpw/2,pos.y + e.h/2 + hph,hpv,hph)
 
     end
   end
+  
 
   local players = world.players
   for username,p in pairs(players) do
@@ -601,7 +680,7 @@ function world_draw()
     local xscale = PLAYER_L / img.w
     local yscale = PLAYER_L / img.h
     love.graphics.setColor(1,1,1)
-    love.graphics.draw(img.img,pos.x - PLAYER_L/2,pos.y - PLAYER_L,0,xscale,yscale)
+    love.graphics.draw(img.img,pos.x - PLAYER_L/2,pos.y - PLAYER_L/2,0,xscale,yscale)
 
     -- Player shoot target
     if username == DEFAULT_USERNAME and p.shoot_target ~= nil then
@@ -625,7 +704,7 @@ function world_draw()
       local xscale = PLAYER_L / img.w / 2
       local yscale = PLAYER_L / img.h / 2
       love.graphics.setColor(1,1,1)
-      love.graphics.draw(img.img,spos.x - PLAYER_L / 4, spos.y - PLAYER_L / 4 - ht / 2,0,xscale,yscale)
+      love.graphics.draw(img.img,spos.x - PLAYER_L / 4, spos.y - PLAYER_L / 4,0,xscale,yscale)
     end
     ::notarget::
   end
@@ -636,6 +715,9 @@ function world_draw()
     love.graphics.setColor(1,0,0)
     love.graphics.circle("fill",bpos.x,bpos.y,BULLET_RADIUS)
   end
+
+  world_draw_objects("above")
+
 end
 
 ----> Have player shoot at something
@@ -677,10 +759,71 @@ function shoot_bullet(player)
   end
 end
 
+function check_collision(x,y,w,h,xo,yo,wo,ho)
+  local x_coll = (x <= xo and (x + w / 2 >= xo - wo / 2)) or (x >= xo and (x - w / 2 <= xo + wo / 2))
+  local y_coll = (y <= yo and (y + h / 2 >= yo - ho / 2)) or (y >= yo and (y - h / 2 <= yo + ho / 2))
+
+  if x_coll and y_coll then
+    -- There is a collision
+    -- Which side of the object is colliding?
+    -- i.e. Which side of the object is furthest from the adjacent side of the entity?
+    local sides = {}
+    sides[1] = (x - w/2 + 2) - (xo + wo/2)
+    sides[2] = (y - h/2 + 2) - (yo + ho/2)
+    sides[3] = (xo - wo/2) - (x + w/2 - 2)
+    sides[4] = (yo - ho/2) - (y + h/2 - 2)
+    
+    local furthest = 1
+    
+    if sides[2] > sides[furthest] then furthest = 2 end
+    if sides[3] > sides[furthest] then furthest = 3 end
+    if sides[4] > sides[furthest] then furthest = 4 end
+
+    return furthest
+  end
+
+  return nil
+end
+
+function check_all_collisions(x,y,w,h)
+  local collisions = {}
+
+  -- Check collisions
+  if world.objects["collide"] ~= nil then
+    for name,obj in pairs(world.objects["collide"]) do
+      local side = check_collision(x,y,w,h,obj.x,obj.y,obj.w,obj.h)
+
+      if side ~= nil then
+        table.insert(collisions,{
+          obj = obj,
+          side = side
+        })
+      end
+    end
+  end
+
+  return collisions
+end
+
 ----> Update player
 function update_player(player,tick)
   if player.move_target ~= nil then
     local new_pos = new_pos(player.x,player.y,player.move_target.x,player.move_target.y,MOVE_SPEED)
+    local collisions = check_all_collisions(new_pos.x,new_pos.y,PLAYER_L,PLAYER_L)
+
+    for _,collision in pairs(collisions) do
+      new_pos.arrived = false
+      if collision.side == 1 then
+        new_pos.x = collision.obj.x + collision.obj.w / 2 + PLAYER_L / 2
+      elseif collision.side == 2 then
+        new_pos.y = collision.obj.y + collision.obj.h / 2 + PLAYER_L / 2
+      elseif collision.side == 3 then
+        new_pos.x = collision.obj.x - collision.obj.w / 2 - PLAYER_L / 2
+      elseif collision.side == 4 then
+        new_pos.y = collision.obj.y - collision.obj.h / 2 - PLAYER_L / 2
+      end
+    end
+    
     player.x = new_pos.x
     player.y = new_pos.y
     if new_pos.arrived then
@@ -801,6 +944,28 @@ function resolve_bullet(bullet)
   end
 end
 
+----> Player pickup drop
+function pickup(username,i)
+  local player = world.players[username]
+  if player ~= nil then
+    player.drops[i] = nil
+  end
+end
+
+----> Interact with object
+function interact(username,layer,objname)
+  local player = world.players[username]
+  if player ~= nil and world.objects[layer] ~= nil then
+    local obj = world.objects[layer][objname]
+
+    if obj.isa ~= nil then
+      local objtype = Objects[obj.isa]
+
+      log_info("Interacted with a " .. obj.isa)
+    end
+  end
+end
+
 ----> Update
 function world_update()
   if world ~= nil then
@@ -823,11 +988,19 @@ function world_update()
             bullets[i] = nil
             goto continue
           end
-          p = new_pos(bullet.x,bullet.y,ent.x,ent.y-ent.h/2,BULLET_SPEED)
+          p = new_pos(bullet.x,bullet.y,ent.x,ent.y,BULLET_SPEED)
         elseif bullet.target.type == "pos" then
           p = new_pos(bullet.x,bullet.y,bullet.target.x,bullet.target.y,BULLET_SPEED)
         else return
         end
+
+        local collisions = check_all_collisions(p.x,p.y,BULLET_RADIUS*1.4,BULLET_RADIUS*1.4)
+
+        for _,collision in pairs(collisions) do
+          bullets[i] = nil
+          goto continue
+        end
+
         bullet.x = p.x
         bullet.y = p.y
         if p.arrived then
@@ -848,22 +1021,24 @@ end
 function get_world_deets()
   if world == nil then return nil end
 
-
-
   local world_objs = {}
-  for _,o in pairs(world.objects) do
-    table.insert(world_objs, {
-      sprite = o.sprite,
-      x = o.x,
-      y = o.y,
-      w = o.w,
-      h = o.h
-    })
+  for layername,layer in pairs(world.objects) do
+    world_objs[layername] = {}
+    for name,o in pairs(layer) do
+      world_objs[layername][name] = {
+        sprite = o.sprite,
+        isa = o.isa,
+        x = o.x,
+        y = o.y,
+        w = o.w,
+        h = o.h
+      }
+    end
   end
 
   local world_ents = {}
-  for _,e in pairs(world.entities) do
-    table.insert(world_ents, {
+  for ename,e in pairs(world.entities) do
+    world_ents[ename] = {
       sprite = e.sprite,
       visible = e.visible,
       isa = e.isa,
@@ -871,7 +1046,7 @@ function get_world_deets()
       y = e.y,
       w = e.w,
       h = e.h
-    })
+    }
   end
 
   local world_deets = {
@@ -893,14 +1068,18 @@ function world_load(world_deets)
 
   local new_world_objs = {}
   if world_deets.objects ~= nil then
-    for _,o in pairs(world_deets.objects) do
-      table.insert(new_world_objs,{
-        sprite = o.sprite,
-        x = o.x,
-        y = o.y,
-        w = o.w,
-        h = o.h
-      })
+    for layername,layer in pairs(world_deets.objects) do
+      new_world_objs[layername] = {}
+      for name,o in pairs(layer) do
+        new_world_objs[layername][name] = {
+          sprite = o.sprite,
+          isa = o.isa,
+          x = o.x,
+          y = o.y,
+          w = o.w,
+          h = o.h
+        }
+      end
     end
   end
 
@@ -1075,6 +1254,7 @@ function world_to_screen(x,y)
 end
 
 --> GAME
+
 ----> Initialise
 function game_init()
   game_keyhandlers = {}
@@ -1112,103 +1292,9 @@ function game_update()
   world_update()
 end
 
-----> Abilities bar mouse click
-function game_mousehandler_abilities(x,y,button,pressed)
-  if pressed and button == 1 then
-    local w = love.graphics.getWidth()
-    local h = love.graphics.getHeight()
-    
-    local l = 80
-    local m = l / 10
-    
-    local xm = 5
-    local ym = 5
-    
-    local yp = h - y - ym
-    local xp = x - xm
-    
-    local yi = math.floor(yp / (l + m)) + 1
-    local xi = math.floor(xp / (l + m)) + 1
-    
-    local yr = yp % (l + m)
-    local xr = xp % (l + m)
-    
-    if 1 <= yi and yi <= 2 and 1 <= xi and xi <= 5 and xr <= l and yr <= l then
-      local i = (2 - yi) * 5 + xi
-      use_ability(DEFAULT_USERNAME,i)
-      return true
-    end
-  end
-  
-  return false
-end
 
-----> Draw the abilities bar
-function game_draw_abilities()
-  local w = love.graphics.getWidth()
-  local h = love.graphics.getHeight()
-  
-  local abilities = get_abilities(DEFAULT_USERNAME)
 
-  local ability_key_inv = {}
-  for key,ability_num in pairs(AbilityKey) do
-    ability_key_inv[ability_num] = key:upper()
-  end
-  
-  local l = 80
-  local m = l / 10
-  local r = 10
 
-  local x = m
-  local y = h - m
-
-  local imgl = l - m
-    
-  local i = 6
-  while i <= 10 do
-
-    love.graphics.setColor(Color["blue"])
-    love.graphics.rectangle('fill',x,y - l,l,l)
-
-    local ability_img = get_image(abilities[i])
-    local xscale = imgl / ability_img.w
-    local yscale = imgl / ability_img.h
-    love.graphics.setColor(1,1,1,1)
-    love.graphics.draw(ability_img.img,x + m / 2, y - l + m/2, 0, xscale, yscale)
-
-    love.graphics.setColor(Color["black"])
-    love.graphics.circle("fill",x + r, y - l + r + 2,r)
-
-    love.graphics.setColor(Color["white"])
-    love.graphics.print(ability_key_inv[i],x + m/2 + 2,y - l + m/2)
-
-    x = x + m + l
-    i = i + 1
-  end
-  
-  x = m
-  y = h - l - m - m
-  i = 1
-  while i <= 5 do
-    love.graphics.setColor(Color["blue"])
-    love.graphics.rectangle('fill',x,y - l,l,l)
-
-    local ability_img = get_image(abilities[i])
-    local xscale = imgl / ability_img.w
-    local yscale = imgl / ability_img.h
-    love.graphics.setColor(1,1,1,1)
-    love.graphics.draw(ability_img.img,x + m / 2, y - l + m/2, 0, xscale, yscale)
-
-    love.graphics.setColor(Color["black"])
-    love.graphics.circle("fill",x + r, y - l + r + 2,r)
-
-    love.graphics.setColor(Color["white"])
-    love.graphics.print(ability_key_inv[i],x + m/2 + 2,y - l + m/2)
-
-    x = x + m + l
-    i = i + 1
-  end
-end
 
 ----> Draw particles
 function game_draw_particles()
@@ -1237,7 +1323,6 @@ end
 function game_draw()
   if world ~= nil and world.players[DEFAULT_USERNAME] ~= nil then
     world_draw()
-    game_draw_abilities()
     game_draw_particles()
   else
     love.graphics.printf("Loading",0,0,800)
@@ -1260,14 +1345,46 @@ function action()
       end
     end
 
+    for layer,objs in pairs(world.objects) do
+      for objname,obj in pairs(objs) do
+        if obj.isa ~= nil then
+          local objtype = Objects[obj.isa]
+          if objtype.interactable then
+            -- Just use the collision detection code to check the interaction
+            local side = check_collision(player.x,player.y,PLAYER_L + 2 * INTERACT_DIST,PLAYER_L + 2 * INTERACT_DIST,obj.x,obj.y,obj.w,obj.h)
+
+            if side ~= nil then
+            
+              local d = 0
+              if side == 1 then
+                d = player.x - obj.x - PLAYER_L / 2 - obj.w / 2
+              elseif side == 2 then
+                d = player.y - obj.y - PLAYER_L / 2 - obj.h / 2
+              elseif side == 3 then
+                d = obj.x - player.x - PLAYER_L / 2 - obj.w / 2
+              elseif side == 4 then
+                d = obj.y - player.y - PLAYER_L / 2 - obj.h / 2
+              end
+
+              if d < INTERACT_DIST and (closest == nil or d < dist) then
+                closest = "object " .. layer .. " " .. objname
+                dist = d
+              end
+            end
+          end
+        end
+      end
+    end
+
     if closest ~= nil then
       local parts = split_spaces(closest)
 
       -- Pick up drop
       if parts[1] == "drop" then
         local i = tonumber(parts[2])
-        local drop = player.drops[i]
-        player.drops[i] = nil
+        pickup(DEFAULT_USERNAME,i)
+      elseif parts[1] == "object" then
+        interact(DEFAULT_USERNAME,parts[2],parts[3])
       end
     end
   end
@@ -1309,11 +1426,7 @@ function game_mousehandler(x,y,button,pressed)
   if not pressed and button == 1 then
     clicking = false
   end
-  
-  if game_mousehandler_abilities(x,y,button,pressed) then
-    return
-  end
-  
+
   if pressed then
     if button == 1 then
       move_char()
@@ -1325,6 +1438,134 @@ function game_mousehandler(x,y,button,pressed)
       set_shoot_target(DEFAULT_USERNAME,pos.x,pos.y)
     end
   end
+end
+
+
+--> UI
+----> Initialise
+function ui_init()
+  ui = {}
+end
+
+----> Add game UI
+function ui_add_game()
+  ui["abilities"] = {
+    visible = true,
+    anchor = Anchor.BOTTOM_LEFT,
+    x_off = 10,
+    y_off = -10,
+    w = UI_ABILITY_LEN * 5 + UI_ABILITY_MARGIN * 4,
+    h = UI_ABILITY_LEN * 2 + UI_ABILITY_MARGIN
+  }
+end
+
+----> Remove game UI
+function ui_remove_game()
+  ui["abilities"] = nil
+end
+
+----> Draw the abilities bar
+function ui_draw_abilities()
+  local w = love.graphics.getWidth()
+  local h = love.graphics.getHeight()
+
+  local uidef = ui["abilities"]
+  if uidef == nil then return end
+
+  local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
+  
+  local abilities = get_abilities(DEFAULT_USERNAME)
+
+  if abilities ~= nil then
+
+    local ability_key_inv = {}
+    for key,ability_num in pairs(AbilityKey) do
+      ability_key_inv[ability_num] = key:upper()
+    end
+    
+    local l = UI_ABILITY_LEN
+    local m = UI_ABILITY_MARGIN
+    local r = 10
+
+    local dx = 0
+    local dy = 0
+
+    local imgl = l - m
+    
+    for i = 1,10 do
+      love.graphics.setColor(Color["blue"])
+      love.graphics.rectangle('fill',p0.x + dx,p0.y + dy,l,l)
+
+      local ability_img = get_image(abilities[i])
+      local xscale = imgl / ability_img.w
+      local yscale = imgl / ability_img.h
+      love.graphics.setColor(1,1,1,1)
+      love.graphics.draw(ability_img.img,p0.x + dx + m / 2, p0.y + dy+ m/2, 0, xscale, yscale)
+
+      love.graphics.setColor(Color["black"])
+      love.graphics.circle("fill",p0.x + dx + r, p0.y + dy + r + 2,r)
+
+      love.graphics.setColor(Color["white"])
+      love.graphics.print(ability_key_inv[i],p0.x + dx + m/2 + 2,p0.y + dy + m/2)
+
+      dx = dx + m + l
+      if i == 5 then
+        dx = 0
+        dy = dy + m + l
+      end
+    end
+  end
+end
+
+----> Draw
+function ui_draw()
+  if ui["abilities"] ~= nil then
+    ui_draw_abilities()
+  end
+end
+
+----> Abilities bar mouse click
+function ui_mousehandler_abilities(x,y,button,pressed)
+  if pressed and button == 1 then
+    local w = love.graphics.getWidth()
+    local h = love.graphics.getHeight()
+    
+    local l = 80
+    local m = l / 10
+    
+    local xm = 5
+    local ym = 5
+    
+    local yp = h - y - ym
+    local xp = x - xm
+    
+    local yi = math.floor(yp / (l + m)) + 1
+    local xi = math.floor(xp / (l + m)) + 1
+    
+    local yr = yp % (l + m)
+    local xr = xp % (l + m)
+    
+    if 1 <= yi and yi <= 2 and 1 <= xi and xi <= 5 and xr <= l and yr <= l then
+      local i = (2 - yi) * 5 + xi
+      use_ability(DEFAULT_USERNAME,i)
+      return true
+    end
+  end
+  
+  return false
+end
+
+----> Mousehandler
+function ui_mousehandler(x,y,button,pressed)
+  if ui["abilities"] ~= nil then
+    if ui_mousehandler_abilities(x,y,button,pressed) then
+      return true
+    end
+  end
+end
+
+function ui_keyhandler(key,pressed)
+
 end
 
 --> DEBUG
@@ -1466,6 +1707,7 @@ function love.load()
   assets_init()
   world_init()
   game_init()
+  ui_init()
   
   register_key_handlers()
   
@@ -1487,6 +1729,8 @@ function love.draw()
     game_draw()
   end
   
+  ui_draw()
+
   if debug ~= Debug.HIDDEN then
     debug_draw()
   end
@@ -1496,6 +1740,7 @@ end
 function love.update()
   if view == View.INIT then
     view = View.GAME
+    ui_add_game()
   elseif view == View.GAME then
     game_update()
   end
@@ -1554,6 +1799,11 @@ function mouserouter(x,y,button,pressed)
   -- Capture debug
   if debug == Debug.CAPTURING then
     return debug_mousehandler(x,y,button,pressed)
+  end
+
+  -- UI
+  if ui_mousehandler(x,y,button,pressed) then
+    return
   end
   
   -- Route to view
