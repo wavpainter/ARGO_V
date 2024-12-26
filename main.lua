@@ -1685,36 +1685,41 @@ function ui_draw_abilities_book()
 
   -- Draw known abilities
   love.graphics.setColor(1,1,1)
-  love.graphics.print("Known",p0.x + bm,p0.y + bh + bm * 2 + il * 2 + im)
+  love.graphics.print("Known",divs.x_learned,divs.y_known_title)
 
+  x = divs.x_learned+200
+  y = divs.y_known_title+8
   love.graphics.setColor(1,1,0)
-  love.graphics.circle("fill",p0.x + bm,p0.y + bh + bm * 2 + il * 2 + im + bh/2 - 2,4)
+  love.graphics.circle("fill",x,y,4)
+  x = x + 10
+  love.graphics.setColor(1,1,1)
+  love.graphics.print("= never used",x,divs.y_known_title)
 
-  local dx = bm
-  local dy = bm * 2 + il * 2 + im + bh * 2
+  x = divs.x_learned
+  y = divs.y_known
   local i = 1
   for aname,ability in pairs(abilities) do
     local ability_img = get_image(aname)
     local xscale = il / ability_img.w
     local yscale = il / ability_img.h
     love.graphics.setColor(1,1,1)
-    love.graphics.draw(ability_img.img,p0.x + dx,p0.y + dy,0,xscale,yscale)
+    love.graphics.draw(ability_img.img,x,y,0,xscale,yscale)
 
     if ability.times_used == 0 then
       love.graphics.setColor(1,1,0)
-      love.graphics.circle("fill",p0.x+dx+5,p0.y+dy+5,4)
+      love.graphics.circle("fill",x+5,y+5,4)
     end
 
     if ability.slot ~= -1 then
       love.graphics.setColor(0,1,0)
-      love.graphics.rectangle("line",p0.x + dx-1,p0.y + dy-1,il+2,il+2)
+      love.graphics.rectangle("line",x-1,y-1,il+2,il+2)
     end
     
-    dx = dx + il + im
+    x = x + il + im
 
     if i % 5 == 0 then
-      dx = bm
-      dy = dy + il + im
+      x = divs.x_learned
+      y = y + il + im
     end
     i = i + 1
   end
@@ -1737,26 +1742,25 @@ end
 ----> Abilities bar mouse click
 function ui_mousehandler_abilities(x,y,button,pressed)
   if pressed and button == 1 then
-    local w = love.graphics.getWidth()
-    local h = love.graphics.getHeight()
+    local uidef = ui["abilities"]
+    if uidef == nil then return end
+  
+    local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
     
-    local l = 80
-    local m = l / 10
+    if x < p0.x or x > (p0.x + uidef.w) or y < p0.y or y > (p0.y + uidef.h) then
+      return false
+    end
+
+    local yp = y - p0.y - UI_ABILITY_MARGIN / 2
+    local xp = x - p0.x - UI_ABILITY_MARGIN / 2
+
+    local l = UI_ABILITY_LEN + UI_ABILITY_MARGIN
+
+    local yi = math.floor(yp / l) + 1
+    local xi = math.floor(xp / l) + 1
     
-    local xm = 5
-    local ym = 5
-    
-    local yp = h - y - ym
-    local xp = x - xm
-    
-    local yi = math.floor(yp / (l + m)) + 1
-    local xi = math.floor(xp / (l + m)) + 1
-    
-    local yr = yp % (l + m)
-    local xr = xp % (l + m)
-    
-    if 1 <= yi and yi <= 2 and 1 <= xi and xi <= 5 and xr <= l and yr <= l then
-      local i = (2 - yi) * 5 + xi
+    if 1 <= yi and yi <= 2 and 1 <= xi and xi <= 5 then
+      local i = (yi - 1) * 5 + xi
       use_ability(DEFAULT_USERNAME,i)
       return true
     end
@@ -1845,7 +1849,7 @@ function debug_draw()
   
   -- Logs
   local y = h - 3 * lh
-  local n = 10
+  local n = 20
   local li = n_logs
   local l = 1
   
@@ -1859,7 +1863,7 @@ function debug_draw()
     
     local ltwidth, wrappedtext = f:getWrap(logtext,w - f:getWidth("\t"))
     local n_lines = 0
-    for _,line in pairs(wrappedtext) do
+    for _,line in ipairs(wrappedtext) do
       n_lines = n_lines + 1
     end
     
@@ -1928,6 +1932,8 @@ function debug_keyhandler(key,pressed)
       end
     end
   end
+
+  return true
 end
 
 ----> Capturing debug mous handler
