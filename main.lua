@@ -261,6 +261,10 @@ local Anchor = {
 }
 local UI_ABILITY_LEN = 80
 local UI_ABILITY_MARGIN = 8
+local UI_ABILITY_ICON_LEN = 60
+local UI_ABILITY_ICON_MARGIN = 6
+local UI_ABILITYBOOK_TITLE = 20
+local UI_ABILITYBOOK_MARGIN = 10
 
 --> VARIABLES
 ----> State
@@ -423,8 +427,8 @@ function ui_add_game()
     anchor = Anchor.CENTRE,
     x_off = 0,
     y_off = 0,
-    h = 300,
-    w = 300
+    w = (UI_ABILITYBOOK_MARGIN + UI_ABILITYBOOK_MARGIN/2 + UI_ABILITY_ICON_LEN * 5 + UI_ABILITY_ICON_MARGIN * 4 + UI_ABILITYBOOK_MARGIN) * 2,
+    h = UI_ABILITYBOOK_MARGIN*3 + UI_ABILITY_ICON_LEN * 2 + UI_ABILITY_ICON_MARGIN + UI_ABILITY_ICON_LEN * 10 + UI_ABILITY_ICON_MARGIN * 9
   }
 end
 
@@ -877,16 +881,6 @@ function update_player(player,tick)
     x = player.x,
     y = player.y
   }
-end
-
-----> Get player abilities
-function get_abilities(username)
-  if world == nil or world.players[username] == nil then
-    return nil
-  end
-
-  local player = world.players[username]
-  return player.ability_map
 end
 
 ----> Player uses ability
@@ -1488,7 +1482,8 @@ function ui_draw_abilities()
 
   local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
   
-  local abilities = get_abilities(DEFAULT_USERNAME)
+  local player = world.players[DEFAULT_USERNAME]
+  local abilities = player.ability_map
 
   if abilities ~= nil then
 
@@ -1538,8 +1533,51 @@ function ui_draw_abilities_book()
 
   local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
 
-  love.graphics.setColor(1,0,0)
-  love.graphics.rectangle("line",p0.x,p0.y,uidef.w,uidef.h)
+  local player = world.players[DEFAULT_USERNAME]
+  local ability_map = player.ability_map
+  local abilities = player.abilities
+
+  love.graphics.setColor(0,0,0)
+  love.graphics.rectangle("fill",p0.x,p0.y,uidef.w,uidef.h)
+
+  local bm = UI_ABILITYBOOK_MARGIN
+  local il = UI_ABILITY_ICON_LEN
+  local im = UI_ABILITY_ICON_MARGIN
+
+  -- Draw outline
+  local x1 = p0.x + bm/2
+  local x2 = p0.x + uidef.w - bm/2
+  local y1 = p0.y + bm/2
+  local y2 = p0.y + uidef.h - bm/2
+  local xc = p0.x + bm * 3 /2 + 5 * il + 4 * im
+  local yc = p0.y + bm * 3 /2 + 2 * il + im
+  love.graphics.setColor(1,1,1)
+  love.graphics.line(x1,y1,x2,y1)
+  love.graphics.line(x1,y1,x1,y2)
+  love.graphics.line(x2,y1,x2,y2)
+  love.graphics.line(x1,y2,x2,y2)
+  love.graphics.line(xc,y1,xc,y2)
+  love.graphics.line(x1,yc,xc,yc)
+
+  -- Draw learned abilities
+  local dx = bm
+  local dy = bm
+  for i = 1,10 do
+    local ability_img = get_image(ability_map[i])
+    local xscale = il / ability_img.w
+    local yscale = il / ability_img.h
+    love.graphics.setColor(1,1,1)
+    love.graphics.draw(ability_img.img,p0.x + dx,p0.y + dy,0,xscale,yscale)
+    dx = dx + il + im
+    if i == 5 then
+      dx = bm
+      dy = dy + il + im
+    end
+  end
+
+  -- Draw known abilities
+  local dx = bm
+  local dy = bm * 2 + il * 2 + im
 end
 
 ----> Draw
