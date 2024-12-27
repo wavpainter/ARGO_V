@@ -60,6 +60,7 @@ local AbilityKey = {
 local Abilities = {
   ["invis"] = {
     index = 1,
+    name = "Invisibility",
     description = "Turn invisible",
     interrupt = false,
     target = false,
@@ -68,7 +69,8 @@ local Abilities = {
   },
   ["beam"] = {
     index = 2,
-    description = "",
+    name = "Beam",
+    description = "Shoot a light beam that cuts through enemies like a hot knife through butter.",
     interrupt = false,
     target = true,
     channel = true,
@@ -76,6 +78,7 @@ local Abilities = {
   },
   ["cantrip"] = {
     index = 3,
+    name = "Think",
     description = "Unlock another random ability",
     interrupt = false,
     target = false,
@@ -84,6 +87,7 @@ local Abilities = {
   },
   ["root"] = {
     index = 4,
+    name = "Root",
     description = "",
     interrupt = true,
     target = true,
@@ -92,6 +96,7 @@ local Abilities = {
   },
   ["negate"] = {
     index = 5,
+    name = "Polarize",
     description = "",
     interrupt = false,
     target = true,
@@ -100,6 +105,7 @@ local Abilities = {
   },
   ["push"] = {
     index = 6,
+    name = "Push",
     description = "",
     interrupt = true,
     target = true,
@@ -108,6 +114,7 @@ local Abilities = {
   },
   ["rage"] = {
     index = 7,
+    name = "Rage",
     description = "",
     interrupt = false,
     target = false,
@@ -116,6 +123,7 @@ local Abilities = {
   },
   ["reflect"] = {
     index = 8,
+    name = "Reflective barrier",
     description = "",
     interrupt = false,
     target = false,
@@ -124,6 +132,7 @@ local Abilities = {
   },
   ["stun"] = {
     index = 9,
+    name = "Stun",
     description = "",
     interrupt = true,
     target = true,
@@ -132,6 +141,7 @@ local Abilities = {
   },
   ["pull"] = {
     index = 10,
+    name = "Pull",
     description = "",
     interrupt = true,
     target = true,
@@ -140,6 +150,7 @@ local Abilities = {
   },
   ["stab"] = {
     index = 11,
+    name = "Stab",
     description = "",
     interrupt = false,
     target = true,
@@ -501,7 +512,7 @@ function ui_add_game()
   ui["abilities_book"] = {
     visible = false,
     anchor = Anchor.CENTRE,
-    selected = nil,
+    selected = "beam",
     learning = false,
     x_off = 0,
     y_off = 0,
@@ -1618,6 +1629,7 @@ function ui_divide_abilities_book()
   divs.x_centre_margin = p0.x + bm * 3 /2 + 5 * il + 4 * im
   divs.x_ability_info = divs.x_centre_margin + bm/2
   divs.x_right_margin = p0.x + uidef.w - bm/2
+  divs.x_close = divs.x_right_margin - bm/2 - bh
   
   divs.y_top_margin = p0.y + bm/2
   divs.y_learned_title = divs.y_top_margin + bm/2
@@ -1626,6 +1638,7 @@ function ui_divide_abilities_book()
   divs.y_known_title = divs.y_learned_known_margin + bm/2
   divs.y_known = divs.y_known_title + bh
   divs.y_bottom_margin = p0.y + uidef.h - bm/2
+  divs.y_close = divs.y_top_margin + bm/2
 
   return divs
 end
@@ -1651,6 +1664,9 @@ function ui_draw_abilities_book()
   local il = UI_ABILITY_ICON_LEN
   local im = UI_ABILITY_ICON_MARGIN
 
+  local default_font = love.graphics.getFont()
+  local large_font = love.graphics.newFont(20)
+
   -- Draw outline
   love.graphics.setColor(1,1,1)
   love.graphics.line(divs.x_left_margin,divs.y_top_margin,divs.x_left_margin,divs.y_bottom_margin) -- Left margin
@@ -1659,6 +1675,13 @@ function ui_draw_abilities_book()
   love.graphics.line(divs.x_left_margin,divs.y_bottom_margin,divs.x_right_margin,divs.y_bottom_margin) -- Bottom margin
   love.graphics.line(divs.x_centre_margin,divs.y_top_margin,divs.x_centre_margin,divs.y_bottom_margin) -- Centre margin
   love.graphics.line(divs.x_left_margin,divs.y_learned_known_margin,divs.x_centre_margin,divs.y_learned_known_margin) -- Learned-known margin
+
+  -- Draw close button
+  love.graphics.setColor(1,0,0)
+  love.graphics.rectangle("fill",divs.x_close,divs.y_close,bh,bh)
+  love.graphics.setColor(1,1,1)
+  love.graphics.line(divs.x_close+4,divs.y_close+4,divs.x_close+bh-4,divs.y_close+bh-4)
+  love.graphics.line(divs.x_close+4,divs.y_close+bh-4,divs.x_close+bh-4,divs.y_close+4)
 
   -- Draw learned abilities
   love.graphics.setColor(1,1,1)
@@ -1672,8 +1695,8 @@ function ui_draw_abilities_book()
     local yscale = il / ability_img.h
     love.graphics.setColor(1,1,1)
     love.graphics.draw(ability_img.img,x,y,0,xscale,yscale)
-    if uidef.learning then
-      love.grahics.setColor(1,1,0,0.25)
+    if uidef.learning and uidef.selected ~= ability_map[i] then
+      love.graphics.setColor(1,1,0,0.25)
       love.graphics.rectangle("fill",x,y,il,il)
     end
     x = x + il + im
@@ -1687,13 +1710,13 @@ function ui_draw_abilities_book()
   love.graphics.setColor(1,1,1)
   love.graphics.print("Known",divs.x_learned,divs.y_known_title)
 
-  x = divs.x_learned+200
+  x = divs.x_learned+80
   y = divs.y_known_title+8
   love.graphics.setColor(1,1,0)
   love.graphics.circle("fill",x,y,4)
   x = x + 10
   love.graphics.setColor(1,1,1)
-  love.graphics.print("= never used",x,divs.y_known_title)
+  love.graphics.print("= never used    (right-click to learn)",x,divs.y_known_title)
 
   x = divs.x_learned
   y = divs.y_known
@@ -1710,10 +1733,17 @@ function ui_draw_abilities_book()
       love.graphics.circle("fill",x+5,y+5,4)
     end
 
+    if aname == uidef.selected then
+      love.graphics.setColor(0.2,0.2,1,0.4)
+      love.graphics.rectangle("fill",x,y,il,il)
+    end
+
     if ability.slot ~= -1 then
       love.graphics.setColor(0,1,0)
       love.graphics.rectangle("line",x-1,y-1,il+2,il+2)
     end
+    
+
     
     x = x + il + im
 
@@ -1725,7 +1755,87 @@ function ui_draw_abilities_book()
   end
 
   -- Draw selected ability
+  love.graphics.setColor(1,1,1)
+  love.graphics.print("Ability Info",divs.x_ability_info,divs.y_learned_title)
+
+  if uidef.selected ~= nil then
+    local selected_ability = Abilities[uidef.selected]
+
+    local img = get_image(uidef.selected)
+    local xscale = UI_ABILITY_LEN / img.w
+    local yscale = UI_ABILITY_LEN / img.h
+
+    love.graphics.setColor(1,1,1)
+    love.graphics.draw(img.img,divs.x_ability_info,divs.y_learned,0,xscale,yscale)
+
+    love.graphics.setFont(large_font)
+
+    local name_w = divs.x_right_margin - divs.x_ability_info + UI_ABILITY_LEN
+    local text_w = large_font:getWidth(selected_ability.name)
+    local text_h = large_font:getHeight(selected_ability.name)
+
+    love.graphics.setColor(1,1,1)
+    love.graphics.print(selected_ability.name,divs.x_ability_info + name_w/2 - text_w/2,divs.y_learned + UI_ABILITY_LEN/2-text_h/2)
   
+    love.graphics.setFont(default_font)
+
+    -- Ability details
+    local x = divs.x_ability_info
+    local y = divs.y_learned + UI_ABILITY_LEN + UI_ABILITY_MARGIN
+    local details_w = divs.x_right_margin - divs.x_ability_info - bm / 2
+
+    -- Write description
+    local desc_w,wrappedtext = default_font:getWrap(selected_ability.description,details_w)
+    for i,line in ipairs(wrappedtext) do
+      love.graphics.setColor(1,1,1)
+      love.graphics.print(line,x,y)
+
+      y = y + default_font:getHeight(line)
+    end
+    x = x + details_w/2
+    y = y + UI_ABILITY_MARGIN
+
+    -- Targeted
+    if selected_ability.target then
+      local t = "TARGETED"
+
+      love.graphics.setColor(1,0.2,0.2)
+      love.graphics.print(t,x - default_font:getWidth(t)/2,y)
+
+      y = y + default_font:getHeight(t) + UI_ABILITY_MARGIN
+    end
+
+    -- Interrupt
+    if selected_ability.interrupt then
+      local t = "INTERRUPT"
+
+      love.graphics.setColor(1,1,0)
+      love.graphics.print(t,x - default_font:getWidth(t)/2,y)
+
+      y = y + default_font:getHeight(t) + UI_ABILITY_MARGIN
+    end
+
+    -- Channel
+    if selected_ability.channel then
+      local t = "CHANNELED"
+
+      love.graphics.setColor(0.5,0.7,1)
+      love.graphics.print(t,x - default_font:getWidth(t)/2,y)
+
+      y = y + default_font:getHeight(t) + UI_ABILITY_MARGIN
+    end
+
+    -- Stationary
+    if selected_ability.stationary then
+      local t = "STATIONARY"
+
+      love.graphics.setColor(0,0.8,1)
+      love.graphics.print(t,x - default_font:getWidth(t)/2,y)
+
+      y = y + default_font:getHeight(t) + UI_ABILITYBOOK_MARGIN
+    end
+
+  end
 end
 
 ----> Draw
@@ -1780,9 +1890,95 @@ function ui_mousehandler_abilities_book(x,y,button,pressed)
     return false
   end
 
+  local bh = UI_ABILITYBOOK_HEADER
+  local bm = UI_ABILITYBOOK_MARGIN
+  local il = UI_ABILITY_ICON_LEN
+  local im = UI_ABILITY_ICON_MARGIN
+
   local player = world.players[DEFAULT_USERNAME]
   local ability_map = player.ability_map
   local abilities = player.abilities
+
+  local abilities_indices = {}
+  for aname,ability in pairs(abilities) do
+    table.insert(abilities_indices,aname)
+  end
+
+  local divs = ui_divide_abilities_book()
+
+  -- Check close button
+  if x > divs.x_close and x < divs.x_close + bh and y > divs.y_close and y < divs.y_close + bh then
+    uidef.visible = false
+    return true
+  end
+
+  -- Check left click learned abilities
+  if x > divs.x_learned and x < divs.x_centre_margin - bm/2 and y > divs.y_learned and y < divs.y_learned_known_margin - bm/2 then
+    local xp = x - divs.x_learned
+    local yp = y - divs.y_learned
+
+    local xi = math.floor(xp / (il + im))
+    local yi = math.floor(yp / (il + im))
+
+    local i = (xi % 5 + 1) + yi * 5
+
+    if uidef.learning and uidef.selected ~= ability_map[i] then
+      uidef.learning = false
+
+      local selected_ability_def = abilities[uidef.selected]
+      
+      local prev_ability = ability_map[i]
+      local prev_ability_def = abilities[prev_ability]
+      local prev_slot = prev_ability_def.slot
+
+      if prev_slot ~= -1 then
+        -- Swap
+        prev_ability_def.slot = selected_ability_def.slot
+        selected_ability_def.slot = prev_slot
+
+        ability_map[prev_ability_def.slot] = prev_ability
+        ability_map[selected_ability_def.slot] = uidef.selected
+      else
+        -- Replace
+        prev_ability_def.slot = -1
+        selected_ability_def.slot = prev_slot
+
+        ability_map[selected_ability_def.slot] = uidef.selected
+      end
+
+    else
+      uidef.selected = ability_map[i]
+      if button == 2 then
+        uidef.learning = true
+      end
+      return true
+    end
+  end
+
+  -- Check click known abilities
+  if x > divs.x_learned and x < divs.x_centre_margin - bm/2 and y > divs.y_known and y < divs.y_bottom_margin - bm/2 then
+    uidef.learning = false
+    
+    local xp = x - divs.x_learned
+    local yp = y - divs.y_known
+
+    local xi = math.floor(xp / (il + im))
+    local yi = math.floor(yp / (il + im))
+
+    local i = (xi % 5 + 1) + yi * 5
+
+    local ability_clicked = abilities_indices[i]
+
+    if ability_clicked ~= nil then
+      uidef.selected = ability_clicked
+      if button == 2 then
+        uidef.learning = true
+      end
+      return true
+    end
+  end
+
+
 
   return true
 end
