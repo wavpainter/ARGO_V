@@ -316,11 +316,7 @@ local DEFAULT_PLAYER = {
     ["pull"] = {
       times_used = 0,
       slot = 10
-    },
-    ["stab"] = {
-      times_used = 0,
-      slot = -1
-    },
+    }
   },
   avatar = "jason",
   shoot_speed = 4,
@@ -512,7 +508,7 @@ function ui_add_game()
   ui["abilities_book"] = {
     visible = false,
     anchor = Anchor.CENTRE,
-    selected = "beam",
+    selected =nil,
     learning = false,
     x_off = 0,
     y_off = 0,
@@ -1063,6 +1059,18 @@ end
 function pickup(username,i)
   local player = world.players[username]
   if player ~= nil then
+    local drop_name = player.drops[i].name
+    local parts = split_spaces(drop_name)
+
+    if parts[1] == "ability" then
+      if player.abilities[parts[2]] == nil then
+        player.abilities[parts[2]] = {
+          slot = -1,
+          times_used = 0
+        }
+      end
+    end
+
     player.drops[i] = nil
   end
 end
@@ -1887,6 +1895,9 @@ function ui_mousehandler_abilities_book(x,y,button,pressed)
   local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
 
   if x < p0.x or x > (p0.x + uidef.w) or y < p0.y or y > (p0.y + uidef.h) then
+    uidef.visible = false
+    uidef.selected = nil
+    uidef.learning = false
     return false
   end
 
@@ -1909,6 +1920,8 @@ function ui_mousehandler_abilities_book(x,y,button,pressed)
   -- Check close button
   if x > divs.x_close and x < divs.x_close + bh and y > divs.y_close and y < divs.y_close + bh then
     uidef.visible = false
+    uidef.selected = nil
+    uidef.learning = false
     return true
   end
 
@@ -1951,14 +1964,14 @@ function ui_mousehandler_abilities_book(x,y,button,pressed)
       if button == 2 then
         uidef.learning = true
       end
-      return true
     end
+    return true
   end
 
   -- Check click known abilities
-  if x > divs.x_learned and x < divs.x_centre_margin - bm/2 and y > divs.y_known and y < divs.y_bottom_margin - bm/2 then
+  if x > divs.x_learned and x < divs.x_centre_margin - bm/2 and y > divs.y_known and y < divs.y_bottom_margin - bm/2 then    
     uidef.learning = false
-    
+
     local xp = x - divs.x_learned
     local yp = y - divs.y_known
 
@@ -1974,11 +1987,11 @@ function ui_mousehandler_abilities_book(x,y,button,pressed)
       if button == 2 then
         uidef.learning = true
       end
-      return true
     end
+    return true
   end
 
-
+  uidef.learning = false
 
   return true
 end
@@ -2000,8 +2013,29 @@ function ui_mousehandler(x,y,button,pressed)
   return false
 end
 
-function ui_keyhandler(key,pressed)
+function ui_keyhandler_abilities_book(key,pressed)
+  if key == "escape" and pressed then
+    ui["abilities_book"].visible = false
+    return true
+  end
+end
 
+function ui_keyhandler_abilities(key,pressed)
+  return false
+end
+
+function ui_keyhandler(key,pressed)
+  if ui["abilities"] ~= nil and ui["abilities"].visible then
+    if ui_keyhandler_abilities(key,pressed) then
+      return true
+    end
+  end
+
+  if ui["abilities_book"] ~= nil and ui["abilities_book"].visible then
+    if ui_keyhandler_abilities_book(key,pressed) then
+      return true
+    end
+  end
 end
 
 --> DEBUG
@@ -2193,6 +2227,8 @@ function keyrouter(key,pressed)
       debug = Debug.HIDDEN
     end
   end
+
+  if ui_keyhandler(key,pressed) then return true end
   
   -- Toggle capturing Debug
   if key == "f4" and pressed then
