@@ -57,107 +57,8 @@ local AbilityKey = {
   ["r"] = 9, 
   ["t"] = 10,
 }
-local Abilities = {
-  ["invis"] = {
-    index = 1,
-    name = "Invisibility",
-    description = "Turn invisible",
-    interrupt = false,
-    target = false,
-    channel = false,
-    stationary = false,
-  },
-  ["beam"] = {
-    index = 2,
-    name = "Beam",
-    description = "Shoot a light beam that cuts through enemies like a hot knife through butter.",
-    interrupt = false,
-    target = true,
-    channel = true,
-    stationary = true,
-  },
-  ["cantrip"] = {
-    index = 3,
-    name = "Think",
-    description = "Unlock another random ability",
-    interrupt = false,
-    target = false,
-    channel = false,
-    stationary = false,
-  },
-  ["root"] = {
-    index = 4,
-    name = "Root",
-    description = "",
-    interrupt = true,
-    target = true,
-    channel = false,
-    stationary = false
-  },
-  ["negate"] = {
-    index = 5,
-    name = "Polarize",
-    description = "",
-    interrupt = false,
-    target = true,
-    channel = false,
-    stationary = false
-  },
-  ["push"] = {
-    index = 6,
-    name = "Push",
-    description = "",
-    interrupt = true,
-    target = true,
-    channel = false,
-    stationary = true
-  },
-  ["rage"] = {
-    index = 7,
-    name = "Rage",
-    description = "",
-    interrupt = false,
-    target = false,
-    channel = false,
-    stationary = false
-  },
-  ["reflect"] = {
-    index = 8,
-    name = "Reflective barrier",
-    description = "",
-    interrupt = false,
-    target = false,
-    channel = false,
-    stationary = false
-  },
-  ["stun"] = {
-    index = 9,
-    name = "Stun",
-    description = "",
-    interrupt = true,
-    target = true,
-    channel = false,
-    stationary = false
-  },
-  ["pull"] = {
-    index = 10,
-    name = "Pull",
-    description = "",
-    interrupt = true,
-    target = true,
-    channel = false,
-    stationary = true
-  },
-  ["stab"] = {
-    index = 11,
-    name = "Stab",
-    description = "",
-    interrupt = false,
-    target = true,
-    channel = false,
-    stationary = false
-  }
-}
+local BIGNUM = 1000000
+
 local Images = {
   ["bin"] = "bin.png",
   ["love"] = "love.png",
@@ -178,6 +79,131 @@ local Images = {
   ["skeleton"] = "skeleton.png",
   ["stab"] = "stab.png",
   ["lectern"] = "lectern.png"
+}
+local Abilities = {
+  ["invis"] = {
+    index = 1,
+    name = "Invisibility",
+    description = "Turn invisible",
+    interrupt = false,
+    target = false,
+    channel = false,
+    stationary = false,
+    canuse = function(world,player) return true end,
+    use = function(world,player) return nil end
+  },
+  ["beam"] = {
+    index = 2,
+    name = "Beam",
+    description = "Shoot a light beam that cuts through enemies.",
+    interrupt = false,
+    target = true,
+    channel = true,
+    stationary = true,
+    range = 10,
+    canuse = function(world,player) return true end,
+    use = function(world,player) return true end
+  },
+  ["cantrip"] = {
+    index = 3,
+    name = "Think",
+    description = "Unlock another random ability",
+    interrupt = false,
+    target = false,
+    channel = false,
+    stationary = false,
+    canuse = function(world,player) return true end,
+    use = function(world,player) return nil end
+  },
+  ["root"] = {
+    index = 4,
+    name = "Root",
+    description = "",
+    interrupt = true,
+    target = true,
+    channel = false,
+    stationary = false,
+    canuse = function(world,player) return true end,
+    use = function(world,player) return nil end
+  },
+  ["negate"] = {
+    index = 5,
+    name = "Polarize",
+    description = "",
+    interrupt = false,
+    target = true,
+    channel = false,
+    stationary = false,
+    canuse = function(world,player) return true end,
+    use = function(world,player) return nil end
+  },
+  ["push"] = {
+    index = 6,
+    name = "Push",
+    description = "",
+    interrupt = true,
+    target = true,
+    channel = false,
+    stationary = true,
+    canuse = function(world,player) return true end,
+    use = function(world,player) return nil end
+  },
+  ["rage"] = {
+    index = 7,
+    name = "Rage",
+    description = "",
+    interrupt = false,
+    target = false,
+    channel = false,
+    stationary = false,
+    canuse = function(world,player) return true end,
+    use = function(world,player) return nil end
+  },
+  ["reflect"] = {
+    index = 8,
+    name = "Reflective barrier",
+    description = "",
+    interrupt = false,
+    target = false,
+    channel = false,
+    stationary = false,
+    canuse = function(world,player) return true end,
+    use = function(world,player) return nil end
+  },
+  ["stun"] = {
+    index = 9,
+    name = "Stun",
+    description = "",
+    interrupt = true,
+    target = true,
+    channel = false,
+    stationary = false,
+    canuse = function(world,player) return true end,
+    use = function(world,player) return nil end
+  },
+  ["pull"] = {
+    index = 10,
+    name = "Pull",
+    description = "",
+    interrupt = true,
+    target = true,
+    channel = false,
+    stationary = true,
+    canuse = function(world,player) return true end,
+    use = function(world,player) return nil end
+  },
+  ["stab"] = {
+    index = 11,
+    name = "Stab",
+    description = "",
+    interrupt = false,
+    target = true,
+    channel = false,
+    stationary = false,
+    range = 0.1,
+    canuse = function(world,player) return true end,
+    use = function(world,player) return nil end
+  }
 }
 local Entities = {
   ["dummy"] = {
@@ -233,6 +259,24 @@ local DEFAULT_WORLD = {
       visible = "true",
       isa = "skeleton",
       x = 200,
+      y = -200,
+      w = 80,
+      h = 160
+    },
+    ["skele2"] = {
+      sprite = "skeleton",
+      visible = "true",
+      isa = "skeleton",
+      x = 400,
+      y = -200,
+      w = 80,
+      h = 160
+    },
+    ["skele3"] = {
+      sprite = "skeleton",
+      visible = "true",
+      isa = "skeleton",
+      x = 600,
       y = -200,
       w = 80,
       h = 160
@@ -385,6 +429,153 @@ local ui = nil
 local key_release_callbacks = nil
 local mouse_release_callbacks = nil
 
+Abilities["beam"].canuse = function(world,player)
+  local pixelrange = Abilities["beam"].range * MOVE_SPEED
+
+  if player.shoot_target == nil 
+  or player.shoot_target.type ~= "entity"
+  or world.entities[player.shoot_target.name] == nil then
+    return false
+  end
+
+  local ent = world.entities[player.shoot_target.name]
+
+  local dist = euclid(ent.x,ent.y,player.x,player.y)
+  if dist > pixelrange then
+    return false
+  end
+  
+  return true
+end
+Abilities["beam"].use = function(world,player)
+  -- Get ability target
+  local target = world.entities[player.shoot_target.name]
+  if target == nil then return nil end
+
+  local a = {}
+  a.name = "beam"
+
+  -- Beam won't follow the target
+  a.target = {
+    x = target.x,
+    y = target.y
+  }
+
+  a.frequency = 10
+  a.damage = 10
+  a.t0 = love.timer.getTime()
+  a.last_dmg = nil
+
+  a.get_endpoint = function()
+    local dx = player.x - a.target.x
+    local dy = player.y - a.target.y
+
+    if dx == 0 then
+      if dy < 0 then 
+        return {
+          x = player.x,
+          y = player.y - BIGNUM
+        }
+      else
+        return { 
+          x = player.x,
+          y = player.y - BIGNUM
+        }
+      end
+    else
+      local m = dy/dx
+
+      if dx < 0 then
+        return { 
+          x = player.x + BIGNUM,
+          y = player.y + BIGNUM * m
+        }
+      else
+        return {
+          x = player.x - BIGNUM,
+          y = player.y - BIGNUM * m
+        }
+      end
+    end
+  end
+
+  -- Init
+  player.move_target = nil -- Stationary
+  last_move_s = love.timer.getTime()
+
+  -- Update
+  a.update = function()
+    if player.move_target ~= nil then
+      return false -- Don't remain active if the player moves
+    end
+
+    if player.ability_channeling ~= a or player.shooting ~= false then
+      return false -- Don't remain active if the player stops channeling the ability
+    end
+
+    -- Deal damage
+    if a.last_dmg == nil or love.timer.getTime() > (a.last_dmg + 1/a.frequency) then
+      a.last_dmg = love.timer.getTime()
+
+      local endpoint = a.get_endpoint()
+
+      -- Find the first object that the beam collides with
+      for ename,e in pairs(world.entities) do
+        if line_intersects_rect(player.x,player.y,endpoint.x,endpoint.y,e.x-e.w/2,e.y-e.h/2,e.w,e.h) then
+          deal_entity_damage(ename,a.damage)
+        end
+      end
+    end
+
+    return true
+  end
+
+  -- Draw
+  a.draw = function()
+    local endpoint = a.get_endpoint()
+    local targetpos = world_to_screen(endpoint.x,endpoint.y)
+    local playerpos = world_to_screen(player.x,player.y)
+
+    love.graphics.setColor(triangle(10,a.t0) * 0.5 + 0.5,triangle(10,a.t0) * 0.5 + 0.5,1)
+    love.graphics.line(playerpos.x,playerpos.y,targetpos.x,targetpos.y)
+  end
+
+  -- Channel the ability
+  player.ability_channeling = a
+  player.shooting = false
+
+  return a
+end
+
+Abilities["stab"].canuse = function(world,player)
+  local pixelrange = Abilities["stab"].range * MOVE_SPEED
+
+  if player.shoot_target == nil 
+  or player.shoot_target.type ~= "entity"
+  or world.entities[player.shoot_target.name] == nil then
+    return false
+  end
+
+  local ent = world.entities[player.shoot_target.name]
+
+  local dist = euclid(ent.x,ent.y,player.x,player.y)
+  log_info("dist = ".. tostring(dist))
+  log_info("pixel range = " .. tostring(pixelrange))
+  if dist > pixelrange then
+    return false
+  end
+  
+  return true
+end
+Abilities["stab"].use = function(world,player)
+  -- Get ability target
+  local target = world.entities[player.shoot_target.name]
+  if target == nil then return nil end
+
+  -- Deal damage
+  deal_entity_damage(player.shoot_target.name,200)
+end
+
 --> UTILS
 ----> Get screen world bounds
 function screen_coords(x,y)
@@ -463,6 +654,201 @@ end
 
 function euclid(x1,y1,x2,y2)
   return math.sqrt((x1 - x2) ^2 + (y1 - y2) ^2)
+end
+
+function quadrant(x,y)
+  if y >= 0 then
+    if x >= 0 then return 1 else return 2 end
+  else
+    if x < 0 then return 3 else return 4 end
+  end
+end
+
+function line_intersects_rect(lx1,ly1,lx2,ly2,rx,ry,rw,rh)
+  -- Get corners of rectangle
+  local rx1 = rx
+  local ry1 = ry
+  local rx2 = rx + rw
+  local ry2 = ry + rh
+
+  -- Check in rectangle
+  if rx1 < lx1 and lx1 < rx2 and ry1 < ly1 and ly1 < ry2 then
+    return true
+  end
+  if rx1 < lx2 and lx2 < rx2 and ry1 < ly2 and ly2 < ry2 then
+    return true
+  end
+
+  -- Get corner deltas
+  local drx1 = rx1 - lx1
+  local dry1 = ry1 - ly1
+  local drx2 = rx2 - lx1
+  local dry2 = ry2 - ly1
+
+  -- Get endpoint deltas
+  local dlx = lx2 - lx1
+  local dly = ly2 - ly1
+
+  -- Get quadrant for each corner
+  local c1q = quadrant(drx2,dry2)
+  local c2q = quadrant(drx1,dry2)
+  local c3q = quadrant(drx1,dry1)
+  local c4q = quadrant(drx2,dry1)
+
+  -- Get endpoint quadrant
+  local eq = quadrant(dlx,dly)
+
+  -- Get the first and last quadrants for the rectangle's corners
+  local first_quad = c1q
+  local last_quad = c1q
+
+  if c2q > last_quad then 
+    last_quad = c2q
+  elseif c2q < first_quad then 
+    first_quad = c2q 
+  end
+
+  if c3q > last_quad then
+    last_quad = c3q
+  elseif c3q < first_quad then
+    first_quad = c3q
+  end
+
+  if c4q > last_quad then
+    last_quad = c4q
+  elseif c4q < first_quad then
+    first_quad = c4q
+  end
+  
+  -- Check if first or last quadrant are shared with endpoint
+  if eq ~= first_quad and eq ~= last_quad then
+    return false
+  end
+
+  -- Check if quadrants are the same
+  local mono_quad = (first_quad == last_quad)
+  if mono_quad then
+    -- All in one quad
+
+    -- Check if shooting vertically
+    if math.abs(dlx) < 0.0001 then
+      if matfh.abs(drx1) < 0.0001 or math.abs(drx2) < 0.0001 then
+        return true
+      else
+        return false
+      end
+    end
+
+    local m = dly / dlx
+    local mr_lower = nil
+    local mr_upper = nil
+
+    if first_quad == 1 then
+      mr_lower = dry1 / drx2
+      mr_upper = dry2 / drx1
+    elseif first_quad == 2 then
+      mr_lower = dry2 / drx2
+      mr_upper = dry1 / drx1
+    elseif first_quad == 3 then
+      mr_lower = dry2 / drx1
+      mr_upper = dry1 / drx2
+    else
+      mr_lower = dry1 / drx1
+      mr_upper = dry2 / drx2
+    end
+
+    if mr_lower < m and m < mr_upper then
+      return true
+    else
+      return false
+    end
+  else
+    -- Rectangle straddles quads
+    
+    -- Check if invgrad should be used to prevent sign flip
+    local invgrad = false
+    if first_quad == 1 and last_quad == 2 then
+      invgrad = true
+    elseif first_quad == 3 and last_quad == 4 then
+      invgrad = true
+    end
+
+    local dl = nil
+    local dr1 = nil
+    local dr2 = nil
+    
+    if not invgrad then
+      dl = dlx
+      dr1 = drx1
+      dr2 = drx2
+    else
+      dl = dly
+      dr1 = dry1
+      dr2 = dry2
+    end
+
+    -- Check if shooting vertically
+    if math.abs(dl) < 0.0001 then
+      if math.abs(dr1) < 0.0001 or math.abs(dr2) < 0.0001 then
+        return true
+      else
+        return false
+      end
+    end
+
+    local m = nil
+    if not invgrad then
+      m = dly / dlx
+    else
+      m = dlx / dly
+    end
+
+    -- Calculate grad for all corners
+    local mc1 = nil
+    local mc2 = nil
+    local mc3 = nil
+    local mc4 = nil
+
+    if not invgrad then
+      mc1 = dry2 / drx2
+      mc2 = dry2 / drx1
+      mc3 = dry1 / drx1
+      mc4 = dry1 / drx2
+    else
+      mc1 = drx2 / dry2
+      mc2 = drx1 / dry2
+      mc3 = drx2 / dry1
+      mc4 = drx2 / dry1
+    end
+
+    local mcmin = mc1
+    local mcmax = mc1
+
+    if mc2 < mcmin then
+      mcmin = mc2
+    elseif mc2 > mcmax then
+      mcmax = mc2
+    end
+
+    if mc3 < mcmin then
+      mcmin = mc3
+    elseif mc3 > mcmax then
+      mcmax = mc3
+    end
+
+    if mc4 < mcmin then
+      mcmin = mc4
+    elseif mc4 > mcmax then
+      mcmax = mc4
+    end
+
+    if mcmin < m and m < mcmax then
+      return true
+    else
+      return false
+    end
+  end
+
 end
 
 function get_anchor_point(anchor,x_off,y_off,w,h)
@@ -804,6 +1190,13 @@ function world_draw()
     love.graphics.setColor(1,1,1)
     love.graphics.draw(img.img,pos.x - PLAYER_L/2,pos.y - PLAYER_L/2,0,xscale,yscale)
 
+    -- Player abilities
+    for aname,aabils in pairs(player.active_abilities) do
+      for _,aabil in pairs(aabils) do
+        aabil.draw()
+      end
+    end
+
     -- Player shoot target
     if username == DEFAULT_USERNAME and p.shoot_target ~= nil then
       local spos = nil
@@ -828,6 +1221,9 @@ function world_draw()
       love.graphics.setColor(1,1,1)
       love.graphics.draw(img.img,spos.x - PLAYER_L / 4, spos.y - PLAYER_L / 4,0,xscale,yscale)
     end
+
+
+
     ::notarget::
   end
 
@@ -953,6 +1349,16 @@ function update_player(player,tick)
     end
   end
 
+  -- Player abilities
+  for aname,aabils in pairs(player.active_abilities) do
+    for i,aabil in pairs(aabils) do
+      local active = aabil.update()
+      if not active then
+        aabils[i] = nil
+      end
+    end
+  end
+
   if player.shooting and player.shoot_target ~= nil then
     local shoot_period = 60 / player.shoot_speed
 
@@ -971,11 +1377,23 @@ end
 ----> Player uses ability
 function use_ability(username,ability_num)
   if world ~= nil and world.players[username] ~= nil then
-    player = world.players[username]
+    local player = world.players[username]
     
     local ability_name = player.ability_map[ability_num]
+    if not Abilities[ability_name].canuse(world,player) then
+      log_info("Can't use" .. ability_name)
+      return
+    end
+
+    local active_ability = Abilities[ability_name].use(world,player)
+    if active_ability == nil then
+      log_info("Failed to use " .. ability_name)
+      return
+    end
+
+    table.insert(player.active_abilities[ability_name],active_ability)
+    
     player.abilities[ability_name].times_used = player.abilities[ability_name].times_used + 1 -- Lua moment
-    log_info(username .. " used ability: " .. ability_name)
   end
 end
 
@@ -1009,6 +1427,8 @@ function deal_entity_damage(ename,dmg)
 
   local entitytype = Entities[ent.isa]
   ent.hp = ent.hp - dmg
+
+  create_hit_particle(dmg,ent.x,ent.y,ent.h/2 + 20)
   
   -- Die
   if ent.hp <= 0 then
@@ -1040,17 +1460,9 @@ function resolve_bullet(bullet)
   if source_parts[1] == "player" and source_parts[2] == DEFAULT_USERNAME then
     if world.players[source_parts[2]] ~= nil then
       local player = world.players[source_parts[2]]
-      local h = 50
-      local x = bullet.x
-      local y = bullet.y
       if bullet.target.type == "entity" then
-        local ent = get_entity(bullet.target.name)
         deal_entity_damage(bullet.target.name,player.damage)
-        y = y
-        h = ent.h/2 + 20
       end
-
-      create_hit_particle(player.damage,x,y,h)
     end
   end
 end
@@ -1262,12 +1674,18 @@ function world_join(username)
     end
   end
 
+  local active_abils = {}
+  for name,abildef in pairs(Abilities) do
+    active_abils[name] = {}
+  end
+
 
   local spawn = world.spawn
   local new_player = {
     username = username,
     abilities = abils,
     ability_map = abilmap,
+    active_abilities = active_abils,
     avatar = DEFAULT_PLAYER.avatar,
     shoot_speed = DEFAULT_PLAYER.shoot_speed,
     damage = DEFAULT_PLAYER.damage,
@@ -1408,7 +1826,6 @@ function game_update()
   
   if clicking and t - last_move_s > MOVE_DELAY_S then
     move_char()
-    last_move_s = t
   end
   
   world_update()
@@ -1596,6 +2013,8 @@ function ui_draw_abilities()
     local imgl = l - m
     
     for i = 1,10 do
+      local abil_def = Abilities[abilities[i]]
+
       love.graphics.setColor(Color["blue"])
       love.graphics.rectangle('fill',p0.x + dx,p0.y + dy,l,l)
 
@@ -1604,6 +2023,11 @@ function ui_draw_abilities()
       local yscale = imgl / ability_img.h
       love.graphics.setColor(1,1,1,1)
       love.graphics.draw(ability_img.img,p0.x + dx + m / 2, p0.y + dy+ m/2, 0, xscale, yscale)
+
+      if not abil_def.canuse(world,player) then
+        love.graphics.setColor(1,0,0,0.5)
+        love.graphics.rectangle("fill",p0.x + dx + m/2, p0.y + dy + m/2,imgl,imgl)
+      end
 
       love.graphics.setColor(Color["black"])
       love.graphics.circle("fill",p0.x + dx + r, p0.y + dy + r + 2,r)
