@@ -135,7 +135,7 @@ local Abilities = {
     target = false,
     channel = false,
     stationary = false,
-    duration = 20,
+    duration = 3,
     use = function(world,player) return nil end
   },
   ["push"] = {
@@ -471,6 +471,7 @@ Abilities["beam"].use = function(world,player)
 
   a.t0 = world.tick
   a.last_dmg = nil
+  a.id = id()
 
   a.get_endpoint = function()
     local dx = player.x - a.target.x
@@ -552,6 +553,7 @@ Abilities["rage"].use = function(world,player)
   local a = {}
   a.t0 = world.tick
   a.tf = world.tick + Abilities["rage"].duration * TPS
+  a.id = id()
 
   a.update = function()
     if world.tick > a.tf then
@@ -1401,7 +1403,7 @@ function update_player(player,tick)
 
   -- Player abilities
   for aname,aabils in pairs(player.active_abilities) do
-    for i,aabil in pairs(aabils) do
+    for id,aabil in pairs(aabils) do
       local ability_def = Abilities[aname]
       local cancel = false
 
@@ -1425,7 +1427,7 @@ function update_player(player,tick)
       end
 
       if cancel then
-        aabils[i] = nil
+        aabils[id] = nil
       end
     end
   end
@@ -1540,9 +1542,13 @@ function use_ability(username,ability_num)
       player.shooting = false
     end
 
-    table.insert(player.active_abilities[ability_name],active_ability)
-    
-    player.abilities[ability_name].times_used = player.abilities[ability_name].times_used + 1 -- Lua moment
+    if active_ability ~= nil then
+      local id = active_ability.id
+      if id == nil then id = id() end
+
+      player.active_abilities[ability_name][id] = active_ability
+      player.abilities[ability_name].times_used = player.abilities[ability_name].times_used + 1 -- Lua moment
+    end
   end
 end
 
@@ -1716,16 +1722,9 @@ function world_update()
         local id = parts[3]
 
         local player = world.players[player_name]
-        if player ~= nil then
-          for i,aabil in pairs(player.active_abilities[summon_ability]) do
-            if aabil.id == id then
-              active = true
-              goto breakloop
-            end
-          end
+        if player ~= nil and player.active_abilities[summon_ability] ~= nil and player.active_abilities[summon_ability][id] ~= nil then
+          active = true
         end
-
-        ::breakloop::
 
         if not active then
           world.entities[ename] = nil
@@ -1989,6 +1988,13 @@ function clear_shoot_target(username)
   end
 end
 
+function shoot_nearest(username)
+  if world ~= nil and world.players[username] ~= nil then
+    local player = world.players[username]
+    set_shoot_target(username,player.x,player.y)
+  end
+end
+
 ----> Convert screen to world
 function screen_to_world(x,y)
   if world == nil or world.players[DEFAULT_USERNAME] == nil then
@@ -2168,6 +2174,7 @@ function register_key_handlers()
       set_shooting(DEFAULT_USERNAME,false)
     end 
   end
+  game_keyhandlers["tab"] = function(key,pressed) if pressed then shoot_nearest(DEFAULT_USERNAME) end end
 end
 
 ----> Key handler
