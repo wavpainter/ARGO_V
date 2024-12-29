@@ -516,7 +516,8 @@ Abilities["beam"].use = function(world,player)
 
       -- Find the first object that the beam collides with
       for ename,e in pairs(world.entities) do
-        if line_intersects_rect(player.x,player.y,endpoint.x,endpoint.y,e.x-e.w/2,e.y-e.h/2,e.w,e.h) then
+        local etype = Entities[e.isa]
+        if etype.enemy and line_intersects_rect(player.x,player.y,endpoint.x,endpoint.y,e.x-e.w/2,e.y-e.h/2,e.w,e.h) then
           deal_entity_damage(ename,Abilities["beam"].damage)
         end
       end
@@ -1188,7 +1189,7 @@ function world_draw()
       love.graphics.setColor(1,1,1)
       love.graphics.draw(img.img,pos.x-e.w/2,pos.y-e.h/2,0,xscale,yscale)
 
-      if entity.targetable then
+      if entity.targetable and entity.enemy then
         love.graphics.setColor(1,triangle(0.5),0)
         love.graphics.rectangle("line",pos.x-e.w/2-5,pos.y-e.h/2-5,e.w+10,e.h+10)
       end
@@ -1963,7 +1964,7 @@ function set_shoot_target(username,x,y)
     local distance = nil
     for ename,e in pairs(world.entities) do
       local etype = Entities[e.isa]
-      if etype.targetable and e.hp > 0 then
+      if etype.targetable and etype.enemy and e.hp > 0 then
         local d = euclid(x,y,e.x,e.y)
         if closest == nil or d < distance then
           closest = ename
