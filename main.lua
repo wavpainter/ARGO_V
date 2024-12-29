@@ -1,5 +1,5 @@
 local json = require("json")
---
+
 --> CONSTANTS
 ----> Util
 local Color = {
@@ -207,7 +207,9 @@ local Abilities = {
 }
 local Entities = {
   ["dummy"] = {
+    enemy = true,
     targetable = true,
+    ephemeral = false,
     hp = 987654321,
     drops = {
       {
@@ -217,7 +219,9 @@ local Entities = {
     }
   },
   ["skeleton"] = {
+    enemy = true,
     targetable = true,
+    ephemeral = false,
     hp = 200,
     drops = {
       {
@@ -227,7 +231,8 @@ local Entities = {
     }
   },
   ["minion"] = {
-    targetable = false,
+    enemy = false,
+    targetable = true,
     ephemeral = true,
     hp = 100,
     drops = {
@@ -1704,7 +1709,26 @@ function world_update()
       if entity.isa == "minion" then
         local player_name = parts[2]
         -- Check summon is still active
+
+        local active = false
         local summon_ability = parts[1]
+        local id = parts[3]
+
+        local player = world.players[player_name]
+        if player ~= nil then
+          for i,aabil in pairs(player.active_abilities[summon_ability]) do
+            if aabil.id == id then
+              active = true
+              goto breakloop
+            end
+          end
+        end
+
+        ::breakloop::
+
+        if not active then
+          world.entities[ename] = nil
+        end
       end
     end
 
