@@ -1704,7 +1704,7 @@ function world_update()
       if entity.isa == "minion" then
         local player_name = parts[2]
         -- Check summon is still active
-        
+        local summon_ability = parts[1]
       end
     end
 
