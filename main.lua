@@ -79,7 +79,8 @@ local Images = {
   ["skeleton"] = "skeleton.png",
   ["stab"] = "stab.png",
   ["lectern"] = "lectern.png",
-  ["lock"] = "lock.png"
+  ["lock"] = "lock.png",
+  ["summon"] = "summon.png"
 }
 local Abilities = {
   ["invis"] = {
@@ -126,15 +127,15 @@ local Abilities = {
     stationary = false,
     use = function(world,player) return nil end
   },
-  ["negate"] = {
+  ["summon"] = {
     index = 5,
-    name = "Polarize",
+    name = "Summon",
     description = "",
     interrupt = false,
-    target = true,
-    range = 10,
+    target = false,
     channel = false,
     stationary = false,
+    duration = 20,
     use = function(world,player) return nil end
   },
   ["push"] = {
@@ -156,6 +157,7 @@ local Abilities = {
     target = false,
     channel = false,
     stationary = false,
+    duration = 5,
     use = function(world,player) return nil end
   },
   ["reflect"] = {
@@ -205,7 +207,7 @@ local Abilities = {
 }
 local Entities = {
   ["dummy"] = {
-    targetable = "true",
+    targetable = true,
     hp = 987654321,
     drops = {
       {
@@ -215,13 +217,20 @@ local Entities = {
     }
   },
   ["skeleton"] = {
-    targetable = "true",
+    targetable = true,
     hp = 200,
     drops = {
       {
         name = "ability stab",
         rate = 1
       }
+    }
+  },
+  ["minion"] = {
+    targetable = false,
+    ephemeral = true,
+    hp = 100,
+    drops = {
     }
   }
 }
@@ -339,7 +348,7 @@ local DEFAULT_PLAYER = {
       times_used = 0,
       slot = 4,
     },
-    ["negate"] = {
+    ["summon"] = {
       locked = true,
       times_used = 0,
       slot = 5,
@@ -378,13 +387,15 @@ local DEFAULT_USERNAME = "jason"
 local MOVE_DELAY_S = 0.15
 local PLAYER_L = 75
 local DROP_L = 40
-local MOVE_SPEED = 1000
+local MOVE_SPEED = 600
 local BULLET_SPEED = 1500
 local BULLET_RADIUS = 10
 local INTERACT_DIST = 100
 local TPS = 60
 local CHARGE_TO_UNLOCK = 8
 local MAX_UNLOCKED = 3
+local OFFSET_X = 0
+local OFFSET_Y = -20
 
 ----> UI
 local Anchor = {
@@ -531,8 +542,72 @@ Abilities["stab"].use = function(world,player)
   deal_entity_damage(player.shoot_target.name,Abilities["stab"].damage)
 end
 
+Abilities["rage"].use = function(world,player)
+  local a = {}
+  a.t0 = world.tick
+  a.tf = world.tick + Abilities["rage"].duration * TPS
+
+  a.update = function()
+    if world.tick > a.tf then
+      return false
+    else
+      return true
+    end
+  end
+
+  a.draw = function()
+
+  end
+
+  return a
+end
+
+Abilities["cantrip"].use = function(world,player)
+  unlock_random(player.username,"cantrip",false)
+end
+
+Abilities["summon"].use = function(world,player)
+  local a = {}
+  a.t0 = world.tick
+  a.tf = world.tick + Abilities["summon"].duration * TPS
+  a.id = id()
+
+  world.entities["summon " .. player.username .. " " .. a.id] = {
+    sprite = "summon",
+    visible = true,
+    isa = "minion",
+    hp = 100,
+    x = player.x,
+    y = player.y,
+    w = PLAYER_L,
+    h = PLAYER_L
+  }
+
+  a.update = function()
+    if world.tick > a.tf then
+      return false
+    else
+      return true
+    end
+  end
+
+  a.draw = function()
+
+  end
+
+  return a
+end
+
 --> UTILS
 ----> Get screen world bounds
+function id()
+    local template ='xxxxxxxx'
+    return string.gsub(template, '[xy]', function (c)
+        local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
+        return string.format('%x', v)
+    end)
+end
+
 function screen_coords(x,y)
   local w = love.graphics.getWidth()
   local h = love.graphics.getHeight()
@@ -839,7 +914,7 @@ end
 function ui_add_game()
   ui["abilities"] = {
     visible = true,
-    anchor = Anchor.BOTTOM_LEFT,
+    anchor = Anchor.BOTTOM,
     x_off = 10,
     y_off = -10,
     w = UI_ABILITY_LEN * 5 + UI_ABILITY_MARGIN * 4,
@@ -859,7 +934,7 @@ function ui_add_game()
 
   ui["charge_bar"] = {
     visible = true,
-    anchor = Anchor.BOTTOM_LEFT,
+    anchor = Anchor.BOTTOM,
     x_off = 10,
     y_off = -10 - ui["abilities"].h - 10,
     w = ui["abilities"].w,
@@ -1020,7 +1095,7 @@ function load_world_from(savename)
 end
 
 ----> Draw backgroudn
-function draw_background(bg,sc)
+function draw_background(bg,x,y)
   local w = love.graphics.getWidth()
   local h = love.graphics.getHeight()
   
@@ -1031,16 +1106,21 @@ function draw_background(bg,sc)
     local col2 = pattern[3]
     local tilew = tonumber(pattern[4])
     local tileh = tonumber(pattern[5])
+
+    local x1 = x - w/2
+    local y1 = y - h/2
+    local x2 = x + w/2
+    local y2 = y + h/2
     
-    local i1 = math.floor(sc.x1 / tilew)
-    local i2 = math.ceil(sc.x2 / tilew)
-    local j1 = math.floor(sc.y1 / tileh)
-    local j2 = math.ceil(sc.y2 / tileh)
+    local i1 = math.floor(x1 / tilew)
+    local i2 = math.ceil(x2 / tilew)
+    local j1 = math.floor(y1 / tileh)
+    local j2 = math.ceil(y2 / tileh)
     
     for i = i1,i2,1 do
       for j = j1,j2,1 do
-        local x = i*tilew - sc.x1
-        local y = j*tileh - sc.y1
+        local x = i*tilew - x1
+        local y = j*tileh - y1
         
         local col = nil
         if (i + j) % 2 == 0 then
@@ -1081,11 +1161,10 @@ end
 ----> Draw
 function world_draw()
   local player = world.players[DEFAULT_USERNAME]
-  local sc = screen_coords(player.x,player.y)
   local bg = world.background
   
   if bg ~= nil then
-    draw_background(bg,sc)
+    draw_background(bg,player.x - OFFSET_X,player.y - OFFSET_Y)
   end
 
   world_draw_objects("below")
@@ -1346,7 +1425,11 @@ function update_player(player,tick)
   end
 
   if player.shooting and player.shoot_target ~= nil then
-    local shoot_period = TPS / player.shoot_speed
+    local shoot_speed = player.shoot_speed
+    for _,rage in pairs(player.active_abilities["rage"]) do
+      shoot_speed = shoot_speed * 2
+    end
+    local shoot_period = TPS / shoot_speed
 
     if player.last_shoot == nil or tick - player.last_shoot > shoot_period then
       shoot_bullet(player)
@@ -1424,11 +1507,8 @@ function use_ability(username,ability_num)
       return
     end
 
-    -- Lock / unlock abilities
+    -- Lock ability
     player.abilities[ability_name].locked = true
-    if player.charge >= CHARGE_TO_UNLOCK then
-      unlock_random(username)
-    end
 
     -- Stationary ability
     if ability_def.stationary then
@@ -1441,6 +1521,11 @@ function use_ability(username,ability_num)
     if active_ability == nil then
       log_info("Failed to use " .. ability_name)
       return
+    end
+
+    -- Unlock abilities
+    if player.charge >= CHARGE_TO_UNLOCK then
+      unlock_random(username)
     end
 
     -- Channel ability
@@ -1513,7 +1598,11 @@ function deal_entity_damage(ename,dmg,interrupt)
 end
 
 ----> Unlock a random ability
-function unlock_random(username,exclude)
+function unlock_random(username,exclude,reset_charge)
+  if reset_charge == nil then reset_charge = true end
+
+  log_info("reset_charge = ".. tostring(reset_charge))
+
   if world.players[username] == nil then
     return
   end
@@ -1536,7 +1625,7 @@ function unlock_random(username,exclude)
   if n_unlocked < MAX_UNLOCKED then
     local i = math.random(1,n_locked)
     local unlocking = locked_abils[i]
-    player.charge = 0
+    if reset_charge then player.charge = 0 end
     player.abilities[unlocking].locked = false
   end
 end
@@ -1609,6 +1698,16 @@ function world_update()
       update_player(player,world.tick)
     end
 
+    local entities = world.entities
+    for ename,entity in pairs(entities) do
+      local parts = split_spaces(ename)
+      if entity.isa == "minion" then
+        local player_name = parts[2]
+        -- Check summon is still active
+        
+      end
+    end
+
     local bullets = world.bullets
     for i,bullet in pairs(bullets) do
 
@@ -1670,15 +1769,17 @@ function get_world_deets()
 
   local world_ents = {}
   for ename,e in pairs(world.entities) do
-    world_ents[ename] = {
-      sprite = e.sprite,
-      visible = e.visible,
-      isa = e.isa,
-      x = e.x,
-      y = e.y,
-      w = e.w,
-      h = e.h
-    }
+    if not Entities[e.isa].ephemeral then
+      world_ents[ename] = {
+        sprite = e.sprite,
+        visible = e.visible,
+        isa = e.isa,
+        x = e.x,
+        y = e.y,
+        w = e.w,
+        h = e.h
+      }
+    end
   end
 
   local world_deets = {
@@ -1873,8 +1974,8 @@ function screen_to_world(x,y)
   local sc = screen_coords(player.x,player.y)
   
   return {
-    x = x + sc.x1,
-    y = y + sc.y1,
+    x = x + sc.x1 - OFFSET_X,
+    y = y + sc.y1 - OFFSET_Y,
   }
 end
 
@@ -1888,8 +1989,8 @@ function world_to_screen(x,y)
   local sc = screen_coords(player.x,player.y)
   
   return {
-    x = x - sc.x1,
-    y = y - sc.y1,
+    x = x - sc.x1 + OFFSET_X,
+    y = y - sc.y1 + OFFSET_Y,
   }
 end
 
