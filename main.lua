@@ -78,7 +78,8 @@ local Images = {
   ["dummy"] = "dummy.png",
   ["skeleton"] = "skeleton.png",
   ["stab"] = "stab.png",
-  ["lectern"] = "lectern.png"
+  ["lectern"] = "lectern.png",
+  ["lock"] = "lock.png"
 }
 local Abilities = {
   ["invis"] = {
@@ -89,7 +90,6 @@ local Abilities = {
     target = false,
     channel = false,
     stationary = false,
-    canuse = function(world,player) return true end,
     use = function(world,player) return nil end
   },
   ["beam"] = {
@@ -98,10 +98,11 @@ local Abilities = {
     description = "Shoot a light beam that cuts through enemies.",
     interrupt = false,
     target = true,
+    range = 10,
     channel = true,
     stationary = true,
-    range = 10,
-    canuse = function(world,player) return true end,
+    frequency = 10,
+    damage = 10,
     use = function(world,player) return true end
   },
   ["cantrip"] = {
@@ -112,7 +113,6 @@ local Abilities = {
     target = false,
     channel = false,
     stationary = false,
-    canuse = function(world,player) return true end,
     use = function(world,player) return nil end
   },
   ["root"] = {
@@ -121,9 +121,9 @@ local Abilities = {
     description = "",
     interrupt = true,
     target = true,
+    range = 10,
     channel = false,
     stationary = false,
-    canuse = function(world,player) return true end,
     use = function(world,player) return nil end
   },
   ["negate"] = {
@@ -132,9 +132,9 @@ local Abilities = {
     description = "",
     interrupt = false,
     target = true,
+    range = 10,
     channel = false,
     stationary = false,
-    canuse = function(world,player) return true end,
     use = function(world,player) return nil end
   },
   ["push"] = {
@@ -143,9 +143,9 @@ local Abilities = {
     description = "",
     interrupt = true,
     target = true,
+    range = 10,
     channel = false,
     stationary = true,
-    canuse = function(world,player) return true end,
     use = function(world,player) return nil end
   },
   ["rage"] = {
@@ -156,7 +156,6 @@ local Abilities = {
     target = false,
     channel = false,
     stationary = false,
-    canuse = function(world,player) return true end,
     use = function(world,player) return nil end
   },
   ["reflect"] = {
@@ -167,7 +166,6 @@ local Abilities = {
     target = false,
     channel = false,
     stationary = false,
-    canuse = function(world,player) return true end,
     use = function(world,player) return nil end
   },
   ["stun"] = {
@@ -176,9 +174,9 @@ local Abilities = {
     description = "",
     interrupt = true,
     target = true,
+    range = 10,
     channel = false,
     stationary = false,
-    canuse = function(world,player) return true end,
     use = function(world,player) return nil end
   },
   ["pull"] = {
@@ -187,9 +185,9 @@ local Abilities = {
     description = "",
     interrupt = true,
     target = true,
+    range = 10,
     channel = false,
     stationary = true,
-    canuse = function(world,player) return true end,
     use = function(world,player) return nil end
   },
   ["stab"] = {
@@ -198,10 +196,10 @@ local Abilities = {
     description = "",
     interrupt = false,
     target = true,
+    range = 0.1,
     channel = false,
     stationary = false,
-    range = 0.1,
-    canuse = function(world,player) return true end,
+    damage = 1000,
     use = function(world,player) return nil end
   }
 }
@@ -218,7 +216,7 @@ local Entities = {
   },
   ["skeleton"] = {
     targetable = "true",
-    hp = 100,
+    hp = 200,
     drops = {
       {
         name = "ability stab",
@@ -322,42 +320,52 @@ local DEFAULT_WORLD = {
 local DEFAULT_PLAYER = {
   abilities = {
     ["invis"] = {
+      locked = true,
       times_used = 0,
       slot = 1,
     },
     ["beam"] = {
+      locked = true,
       times_used = 0,
       slot = 2,
     },
     ["cantrip"] = {
+      locked = true,
       times_used = 0,
       slot = 3,
     },
     ["root"] = {
+      locked = true,
       times_used = 0,
       slot = 4,
     },
     ["negate"] = {
+      locked = true,
       times_used = 0,
       slot = 5,
     },
     ["push"] = {
+      locked = true,
       times_used = 0,
       slot = 6,
     },
     ["rage"] = {
+      locked = true,
       times_used = 0,
       slot = 7
     },
     ["reflect"] = {
+      locked = true,
       times_used = 0,
       slot = 8
     },
     ["stun"] = {
+      locked = true,
       times_used = 0,
       slot = 9
     },
     ["pull"] = {
+      locked = true,
       times_used = 0,
       slot = 10
     }
@@ -374,6 +382,9 @@ local MOVE_SPEED = 1000
 local BULLET_SPEED = 1500
 local BULLET_RADIUS = 10
 local INTERACT_DIST = 100
+local TPS = 60
+local CHARGE_TO_UNLOCK = 8
+local MAX_UNLOCKED = 3
 
 ----> UI
 local Anchor = {
@@ -429,31 +440,12 @@ local ui = nil
 local key_release_callbacks = nil
 local mouse_release_callbacks = nil
 
-Abilities["beam"].canuse = function(world,player)
-  local pixelrange = Abilities["beam"].range * MOVE_SPEED
-
-  if player.shoot_target == nil 
-  or player.shoot_target.type ~= "entity"
-  or world.entities[player.shoot_target.name] == nil then
-    return false
-  end
-
-  local ent = world.entities[player.shoot_target.name]
-
-  local dist = euclid(ent.x,ent.y,player.x,player.y)
-  if dist > pixelrange then
-    return false
-  end
-  
-  return true
-end
 Abilities["beam"].use = function(world,player)
   -- Get ability target
   local target = world.entities[player.shoot_target.name]
   if target == nil then return nil end
 
   local a = {}
-  a.name = "beam"
 
   -- Beam won't follow the target
   a.target = {
@@ -461,9 +453,7 @@ Abilities["beam"].use = function(world,player)
     y = target.y
   }
 
-  a.frequency = 10
-  a.damage = 10
-  a.t0 = love.timer.getTime()
+  a.t0 = world.tick
   a.last_dmg = nil
 
   a.get_endpoint = function()
@@ -499,30 +489,19 @@ Abilities["beam"].use = function(world,player)
     end
   end
 
-  -- Init
-  player.move_target = nil -- Stationary
-  last_move_s = love.timer.getTime()
-
   -- Update
   a.update = function()
-    if player.move_target ~= nil then
-      return false -- Don't remain active if the player moves
-    end
-
-    if player.ability_channeling ~= a or player.shooting ~= false then
-      return false -- Don't remain active if the player stops channeling the ability
-    end
 
     -- Deal damage
-    if a.last_dmg == nil or love.timer.getTime() > (a.last_dmg + 1/a.frequency) then
-      a.last_dmg = love.timer.getTime()
+    if a.last_dmg == nil or world.tick > (a.last_dmg + math.floor(TPS / Abilities["beam"].frequency)) then
+      a.last_dmg = world.tick
 
       local endpoint = a.get_endpoint()
 
       -- Find the first object that the beam collides with
       for ename,e in pairs(world.entities) do
         if line_intersects_rect(player.x,player.y,endpoint.x,endpoint.y,e.x-e.w/2,e.y-e.h/2,e.w,e.h) then
-          deal_entity_damage(ename,a.damage)
+          deal_entity_damage(ename,Abilities["beam"].damage)
         end
       end
     end
@@ -540,40 +519,16 @@ Abilities["beam"].use = function(world,player)
     love.graphics.line(playerpos.x,playerpos.y,targetpos.x,targetpos.y)
   end
 
-  -- Channel the ability
-  player.ability_channeling = a
-  player.shooting = false
-
   return a
 end
 
-Abilities["stab"].canuse = function(world,player)
-  local pixelrange = Abilities["stab"].range * MOVE_SPEED
-
-  if player.shoot_target == nil 
-  or player.shoot_target.type ~= "entity"
-  or world.entities[player.shoot_target.name] == nil then
-    return false
-  end
-
-  local ent = world.entities[player.shoot_target.name]
-
-  local dist = euclid(ent.x,ent.y,player.x,player.y)
-  log_info("dist = ".. tostring(dist))
-  log_info("pixel range = " .. tostring(pixelrange))
-  if dist > pixelrange then
-    return false
-  end
-  
-  return true
-end
 Abilities["stab"].use = function(world,player)
   -- Get ability target
   local target = world.entities[player.shoot_target.name]
   if target == nil then return nil end
 
   -- Deal damage
-  deal_entity_damage(player.shoot_target.name,200)
+  deal_entity_damage(player.shoot_target.name,Abilities["stab"].damage)
 end
 
 --> UTILS
@@ -732,7 +687,7 @@ function line_intersects_rect(lx1,ly1,lx2,ly2,rx,ry,rw,rh)
 
     -- Check if shooting vertically
     if math.abs(dlx) < 0.0001 then
-      if matfh.abs(drx1) < 0.0001 or math.abs(drx2) < 0.0001 then
+      if math.abs(drx1) < 0.0001 or math.abs(drx2) < 0.0001 then
         return true
       else
         return false
@@ -901,12 +856,22 @@ function ui_add_game()
     w = (UI_ABILITYBOOK_MARGIN + UI_ABILITYBOOK_MARGIN/2 + UI_ABILITY_ICON_LEN * 5 + UI_ABILITY_ICON_MARGIN * 4 + UI_ABILITYBOOK_MARGIN) * 2,
     h = UI_ABILITYBOOK_MARGIN*3 + UI_ABILITYBOOK_HEADER * 2 + UI_ABILITY_ICON_LEN * 2 + UI_ABILITY_ICON_MARGIN + UI_ABILITY_ICON_LEN * 10 + UI_ABILITY_ICON_MARGIN * 9
   }
+
+  ui["charge_bar"] = {
+    visible = true,
+    anchor = Anchor.BOTTOM_LEFT,
+    x_off = 10,
+    y_off = -10 - ui["abilities"].h - 10,
+    w = ui["abilities"].w,
+    h = 20
+  }
 end
 
 ----> Remove game UI
 function ui_remove_game()
   ui["abilities"] = nil
   ui["abilities_book"] = nil
+  ui["charge_bar"] = nil
 end
 
 
@@ -1352,15 +1317,36 @@ function update_player(player,tick)
   -- Player abilities
   for aname,aabils in pairs(player.active_abilities) do
     for i,aabil in pairs(aabils) do
-      local active = aabil.update()
-      if not active then
+      local ability_def = Abilities[aname]
+      local cancel = false
+
+      -- Cancel stationary ability if player moves
+      if ability_def.stationary then
+        if player.move_target ~= nil then
+          cancel = true
+        end
+      end
+
+      -- Cancel channeling if player uses another ability or shoots
+      if ability_def.channel then
+        if player.ability_channeling ~= aabil or player.shooting ~= false then
+          cancel = true
+        end
+      end
+
+      if not cancel then
+        local active = aabil.update()
+        if not active then cancel = true end
+      end
+
+      if cancel then
         aabils[i] = nil
       end
     end
   end
 
   if player.shooting and player.shoot_target ~= nil then
-    local shoot_period = 60 / player.shoot_speed
+    local shoot_period = TPS / player.shoot_speed
 
     if player.last_shoot == nil or tick - player.last_shoot > shoot_period then
       shoot_bullet(player)
@@ -1374,21 +1360,93 @@ function update_player(player,tick)
   }
 end
 
+----> Can use ability
+function can_use_ability(username,ability_name)
+  local ability_def = Abilities[ability_name]
+  local player = world.players[username]
+  if ability_def == nil or player == nil then return false end
+
+  if player.abilities[ability_name].locked then return false end
+
+  if ability_def.target then
+    if player.shoot_target == nil then
+      return false
+    end
+    
+    local target = nil
+    if player.shoot_target.type == "entity" then
+      local ent = world.entities[player.shoot_target.name]
+      if ent == nil then
+        return false
+      end
+
+      target = {
+        x = ent.x,
+        y = ent.y
+      }
+    elseif player.shoot_target.type == "player" and world.entities[player.shoot_target.name] == nil then
+      local player = world.players[player.shoot_target.name]
+      if player == nil then
+        return false
+      end
+
+      target = {
+        x = player.x,
+        y = player.y
+      }
+    elseif player.shoot_target.type == "pos" then
+      target = {
+        x = player.shoot_target.x,
+        y = player.shoot_target.y
+      }
+    end
+
+    local pixelrange = ability_def.range * MOVE_SPEED
+    local dist = euclid(target.x,target.y,player.x,player.y)
+
+    if dist > pixelrange then
+      return false
+    end
+  end
+
+  return true
+end
+
 ----> Player uses ability
 function use_ability(username,ability_num)
   if world ~= nil and world.players[username] ~= nil then
     local player = world.players[username]
-    
+
     local ability_name = player.ability_map[ability_num]
-    if not Abilities[ability_name].canuse(world,player) then
+    local ability_def = Abilities[ability_name]
+    if not can_use_ability(player.username,ability_name) then
       log_info("Can't use" .. ability_name)
       return
     end
 
-    local active_ability = Abilities[ability_name].use(world,player)
+    -- Lock / unlock abilities
+    player.abilities[ability_name].locked = true
+    if player.charge >= CHARGE_TO_UNLOCK then
+      unlock_random(username)
+    end
+
+    -- Stationary ability
+    if ability_def.stationary then
+      player.move_target = nil -- Stationary
+      last_move_s = love.timer.getTime()
+    end
+
+    -- Call use
+    local active_ability = ability_def.use(world,player)
     if active_ability == nil then
       log_info("Failed to use " .. ability_name)
       return
+    end
+
+    -- Channel ability
+    if ability_def.channel then
+      player.ability_channeling = active_ability
+      player.shooting = false
     end
 
     table.insert(player.active_abilities[ability_name],active_ability)
@@ -1422,7 +1480,9 @@ function create_hit_particle(damage,x,y,h)
 end
 
 ----> Deal entity damage
-function deal_entity_damage(ename,dmg)
+function deal_entity_damage(ename,dmg,interrupt)
+  if interrupt == nil then interrupt = false end
+
   local ent = get_entity(ename)
 
   local entitytype = Entities[ent.isa]
@@ -1452,16 +1512,51 @@ function deal_entity_damage(ename,dmg)
   end
 end
 
+----> Unlock a random ability
+function unlock_random(username,exclude)
+  if world.players[username] == nil then
+    return
+  end
+  
+  local player = world.players[username]
+  local n_unlocked = 0
+  local n_locked = 0
+  local locked_abils = {}
+  for aname,abil in pairs(player.abilities) do
+    if not abil.locked then
+      n_unlocked = n_unlocked + 1
+    elseif abil.slot ~= -1 then
+      if exclude ~= aname then
+        table.insert(locked_abils,aname)
+        n_locked = n_locked + 1
+      end
+    end
+  end
+
+  if n_unlocked < MAX_UNLOCKED then
+    local i = math.random(1,n_locked)
+    local unlocking = locked_abils[i]
+    player.charge = 0
+    player.abilities[unlocking].locked = false
+  end
+end
+
 ----> Resolve bullet
 function resolve_bullet(bullet)
   -- Create hit particle
   local source = bullet.source
   local source_parts = split_spaces(source)
-  if source_parts[1] == "player" and source_parts[2] == DEFAULT_USERNAME then
+  if source_parts[1] == "player" then
     if world.players[source_parts[2]] ~= nil then
       local player = world.players[source_parts[2]]
       if bullet.target.type == "entity" then
         deal_entity_damage(bullet.target.name,player.damage)
+      end
+
+      player.charge = player.charge + 1
+      if player.charge >= CHARGE_TO_UNLOCK then
+        player.charge = CHARGE_TO_UNLOCK
+        unlock_random(source_parts[2])
       end
     end
   end
@@ -1666,6 +1761,7 @@ function world_join(username)
   local abilmap = {}
   for name,abil in pairs(DEFAULT_PLAYER.abilities) do
     abils[name] = {
+      locked = abil.locked,
       times_used = abil.times_used,
       slot = abil.slot
     }
@@ -1689,6 +1785,7 @@ function world_join(username)
     avatar = DEFAULT_PLAYER.avatar,
     shoot_speed = DEFAULT_PLAYER.shoot_speed,
     damage = DEFAULT_PLAYER.damage,
+    charge = 0,
     drops = {},
     x = spawn.x,
     y = spawn.y,
@@ -1817,16 +1914,15 @@ end
 
 ----> Update
 function game_update()
-  local t = love.timer.getTime()
   if world == nil then
     world_load(DEFAULT_WORLD)
     world_join(DEFAULT_USERNAME)
     ui_add_game()
   end
   
-  if clicking and t - last_move_s > MOVE_DELAY_S then
-    move_char()
-  end
+  --if clicking and t - last_move_s > MOVE_DELAY_S then
+  --  move_char()
+  --end
   
   world_update()
 end
@@ -2011,7 +2107,8 @@ function ui_draw_abilities()
     local dy = 0
 
     local imgl = l - m
-    
+    local lockl = (l-m) * 2/3
+
     for i = 1,10 do
       local abil_def = Abilities[abilities[i]]
 
@@ -2024,9 +2121,17 @@ function ui_draw_abilities()
       love.graphics.setColor(1,1,1,1)
       love.graphics.draw(ability_img.img,p0.x + dx + m / 2, p0.y + dy+ m/2, 0, xscale, yscale)
 
-      if not abil_def.canuse(world,player) then
+      if not can_use_ability(player.username,abilities[i]) then
         love.graphics.setColor(1,0,0,0.5)
         love.graphics.rectangle("fill",p0.x + dx + m/2, p0.y + dy + m/2,imgl,imgl)
+      end
+
+      if player.abilities[abilities[i]].locked then
+        local lock_img = get_image("lock")
+        local xscale = lockl / lock_img.w
+        local yscale = lockl / lock_img.h
+        love.graphics.setColor(1,1,1)
+        love.graphics.draw(lock_img.img,p0.x + dx + m / 2 + imgl / 2 - lockl / 2, p0.y + dy + m / 2 + imgl / 2 - lockl / 2,0,xscale,yscale)
       end
 
       love.graphics.setColor(Color["black"])
@@ -2270,6 +2375,22 @@ function ui_draw_abilities_book()
   end
 end
 
+function ui_draw_charge_bar()
+  local uidef = ui["charge_bar"]
+
+  local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
+
+  local player = world.players[DEFAULT_USERNAME]
+
+  local charge_ratio = player.charge / CHARGE_TO_UNLOCK
+
+  love.graphics.setColor(0,0,0)
+  love.graphics.rectangle("fill",p0.x,p0.y,uidef.w,uidef.h)
+  love.graphics.setColor(0.3,0.6,1)
+  love.graphics.rectangle("fill",p0.x,p0.y,charge_ratio * uidef.w,uidef.h)
+end
+
+
 ----> Draw
 function ui_draw()
   if ui["abilities"] ~= nil and ui["abilities"].visible then
@@ -2278,6 +2399,10 @@ function ui_draw()
 
   if ui["abilities_book"] ~= nil and ui["abilities_book"].visible then
     ui_draw_abilities_book()
+  end
+
+  if ui["charge_bar"] ~= nil and ui["charge_bar"].visible then
+    ui_draw_charge_bar()
   end
 end
 
@@ -2368,7 +2493,7 @@ function ui_mousehandler_abilities_book(x,y,button,pressed)
       local prev_ability_def = abilities[prev_ability]
       local prev_slot = prev_ability_def.slot
 
-      if prev_slot ~= -1 then
+      if selected_ability_def.slot ~= -1 then
         -- Swap
         prev_ability_def.slot = selected_ability_def.slot
         selected_ability_def.slot = prev_slot
@@ -2378,7 +2503,9 @@ function ui_mousehandler_abilities_book(x,y,button,pressed)
       else
         -- Replace
         prev_ability_def.slot = -1
+        prev_ability_def.locked = true
         selected_ability_def.slot = prev_slot
+        selected_ability_def.locked = true
 
         ability_map[selected_ability_def.slot] = uidef.selected
       end
