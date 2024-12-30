@@ -232,6 +232,7 @@ local Entities = {
     ephemeral = false,
     damage = 1,
     shoot_speed = 1,
+    range = 3,
     hp = 987654321,
     drops = {
       {
@@ -246,6 +247,7 @@ local Entities = {
     ephemeral = false,
     shoot_speed = 1.5,
     damage = 10,
+    range = 3,
     hp = 200,
     drops = {
       {
@@ -410,6 +412,7 @@ local DEFAULT_PLAYER = {
   },
   avatar = "jason",
   shoot_speed = 4,
+  range = 8,
   damage = 10,
   hp = PLAYER_HP
 }
@@ -603,6 +606,7 @@ Abilities["summon"].use = function(world,player)
     last_shoot = nil,
     shoot_speed = Abilities["summon"].shoot_speed,
     damage = Abilities["summon"].damage,
+    range = Abilities["summon"].range,
     x = player.x,
     y = player.y,
     w = PLAYER_L,
@@ -2123,6 +2127,7 @@ function world_load(world_deets)
         visible = edef.visible,
         shoot_speed = entitytype.shoot_speed,
         damage = entitytype.damage,
+        range = entitytype.range,
         isa = edef.isa,
         hp = entitytype.hp,
         x = edef.x,
@@ -2189,6 +2194,7 @@ function world_join(username)
     shoot_speed = DEFAULT_PLAYER.shoot_speed,
     damage = DEFAULT_PLAYER.damage,
     hp = DEFAULT_PLAYER.hp,
+    range = DEFAULT_PLAYER.range,
     charge = 0,
     drops = {},
     x = spawn.x,
