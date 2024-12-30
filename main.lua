@@ -154,6 +154,7 @@ local Abilities = {
     stationary = false,
     duration = 20,
     shoot_speed = 2,
+    range = 1,
     damage = 10,
     use = function(world,player) return nil end
   },
@@ -232,7 +233,7 @@ local Entities = {
     ephemeral = false,
     damage = 1,
     shoot_speed = 1,
-    range = 3,
+    range = 1,
     hp = 987654321,
     drops = {
       {
@@ -247,7 +248,7 @@ local Entities = {
     ephemeral = false,
     shoot_speed = 1.5,
     damage = 10,
-    range = 3,
+    range = 1,
     hp = 200,
     drops = {
       {
@@ -412,7 +413,7 @@ local DEFAULT_PLAYER = {
   },
   avatar = "jason",
   shoot_speed = 4,
-  range = 8,
+  range = 1,
   damage = 10,
   hp = PLAYER_HP
 }
@@ -1311,6 +1312,30 @@ function world_draw_objects(layername)
   end
 end
 
+----> Get shoot target position
+function get_target_pos(target)
+  if target.type == "entity" then
+    local entity = world.entities[target.name]
+    if entity == nil then return nil end
+    return {
+      x = entity.x,
+      y = entity.y
+    }
+  elseif target.type == "player" then
+    local player = world.players[target.name]
+    if player == nil then return nil end
+    return {
+      x = player.x,
+      y = player.y
+    }
+  elseif target.type == "pos" then
+    return {
+      x = target.x,
+      y = target.y
+    }
+  else return nil end
+end
+
 ----> Draw
 function world_draw()
   local player = world.players[DEFAULT_USERNAME]
@@ -1641,9 +1666,15 @@ function update_player(player,tick)
     end
     local shoot_period = TPS / shoot_speed
 
-    if player.last_shoot == nil or tick - player.last_shoot > shoot_period then
-      shoot_bullet(player)
-      player.last_shoot = tick
+    local target_pos = get_target_pos(player.shoot_target)
+    if target_pos ~= nil then
+      local target_dist = euclid(target_pos.x,target_pos.y,player.x,player.y)
+      if target_dist <= get_pixel_range(player.range) then
+        if player.last_shoot == nil or tick - player.last_shoot > shoot_period then
+          shoot_bullet(player)
+          player.last_shoot = tick
+        end
+      end
     end
   end
 
@@ -1651,6 +1682,10 @@ function update_player(player,tick)
     x = player.x,
     y = player.y
   }
+end
+
+function get_pixel_range(range)
+  return range * MOVE_SPEED
 end
 
 ----> Can use ability
@@ -1742,6 +1777,8 @@ function use_ability(username,ability_num)
     if ability_def.channel then
       player.ability_channeling = active_ability
       player.shooting = false
+    else
+      player.ability_channeling = nil
     end
 
     if active_ability ~= nil then
@@ -1833,8 +1870,6 @@ end
 function unlock_random(username,exclude,reset_charge)
   if reset_charge == nil then reset_charge = true end
 
-  log_info("reset_charge = ".. tostring(reset_charge))
-
   if world.players[username] == nil then
     return
   end
@@ -1883,7 +1918,6 @@ function resolve_bullet(bullet)
   elseif source_parts[1] == "entity" then
     if world.entities[source_parts[2]] ~= nil then
       local entity = world.entities[source_parts[2]]
-      log_info(entity.damage)
       if bullet.target.type == "entity" then
         deal_entity_damage(bullet.target.name,entity.damage)
       elseif bullet.target.type == "player" then
@@ -1970,14 +2004,18 @@ function world_update()
 
       -- Entity shoot
       if entity.shoot_target ~= nil then
-        log_info(ename .. " is shooting")
-        log_info(entity.shoot_speed)
         local shoot_speed = entity.shoot_speed
         local shoot_period = TPS / shoot_speed
-    
-        if entity.last_shoot == nil or world.tick - entity.last_shoot > shoot_period then
-          entity_shoot_bullet(ename)
-          entity.last_shoot = world.tick
+
+        local target_pos = get_target_pos(entity.shoot_target)
+        if target_pos ~= nil then
+          local target_dist = euclid(entity.x,entity.y,target_pos.x,target_pos.y)
+          if target_dist <= get_pixel_range(entity.range) then
+            if entity.last_shoot == nil or world.tick - entity.last_shoot > shoot_period then
+              entity_shoot_bullet(ename)
+              entity.last_shoot = world.tick
+            end
+          end
         end
       end
 
@@ -2121,7 +2159,6 @@ function world_load(world_deets)
   if world_deets.entities ~= nil then
     for ename,edef in pairs(world_deets.entities) do
       local entitytype = Entities[edef.isa]
-      log_info(json.encode(edef))
       new_world_entities[ename] = {
         sprite = edef.sprite,
         visible = edef.visible,
@@ -2821,6 +2858,9 @@ function ui_draw_health_bar()
   love.graphics.rectangle("fill",p0.x,p0.y,uidef.w,uidef.h)
   love.graphics.setColor(0,1,0)
   love.graphics.rectangle("fill",p0.x,p0.y,health_ratio * uidef.w,uidef.h)
+
+  love.graphics.setColor(0,0,0)
+  love.graphics.print("HP: " .. player.hp .. " / " .. tostring(PLAYER_HP),p0.x + 10,p0.y + 2)
 end
 
 ----> Draw
