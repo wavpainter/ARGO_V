@@ -135,7 +135,9 @@ local Abilities = {
     target = false,
     channel = false,
     stationary = false,
-    duration = 3,
+    duration = 20,
+    shoot_speed = 2,
+    damage = 10,
     use = function(world,player) return nil end
   },
   ["push"] = {
@@ -401,6 +403,9 @@ local CHARGE_TO_UNLOCK = 8
 local MAX_UNLOCKED = 3
 local OFFSET_X = 0
 local OFFSET_Y = -20
+local ENTITY_FOLLOW_THRESH = 250
+local ENTITY_FOLLOW_DIST = 100
+local ENTITY_JUMP_DIST = 1000
 
 ----> UI
 local Anchor = {
@@ -579,17 +584,46 @@ Abilities["summon"].use = function(world,player)
   a.t0 = world.tick
   a.tf = world.tick + Abilities["summon"].duration * TPS
   a.id = id()
+  a.following = false
 
-  world.entities["summon " .. player.username .. " " .. a.id] = {
+  local entity = {
     sprite = "summon",
     visible = true,
     isa = "minion",
     hp = 100,
+    shoot_target = nil,
+    last_shoot = nil,
+    shoot_speed = Abilities["summon"].shoot_speed,
+    damage = Abilities["summon"].damage,
     x = player.x,
     y = player.y,
     w = PLAYER_L,
     h = PLAYER_L
   }
+
+  entity.update = function()
+    local dist_to_player = euclid(entity.x,entity.y,player.x,player.y)
+    if dist_to_player > ENTITY_JUMP_DIST then
+      entity.x = player.x
+      entity.y = player.y
+    elseif dist_to_player > ENTITY_FOLLOW_THRESH then
+      a.following = true
+    elseif dist_to_player < ENTITY_FOLLOW_DIST then
+      a.following = false
+    end
+
+    if a.following then
+      local pos = new_pos(entity.x,entity.y,player.x,player.y,MOVE_SPEED)
+      adjust_pos_for_collisions(pos,entity.w,entity.h)
+
+      entity.x = pos.x
+      entity.y = pos.y
+    end
+
+    entity.shoot_target = player.shoot_target
+  end
+
+  world.entities["summon." .. player.username .. "." .. a.id] = entity
 
   a.update = function()
     if world.tick > a.tf then
@@ -679,6 +713,15 @@ function new_pos(x1,y1,x2,y2,speed)
       y = y1 + (y2 - y1) * scale
     }
   end
+end
+
+function split_delim(str,delim)
+  local str_arr = {}
+  for x in str:gmatch("([^"..delim.."]+)"..delim.."?") do
+    table.insert(str_arr,x)
+  end
+
+  return str_arr
 end
 
 function split_spaces(str)
@@ -1329,6 +1372,59 @@ function shoot_bullet(player)
   end
 end
 
+----> Have entity shoot at something
+function entity_shoot_bullet(ename)
+  local entity = world.entities[ename]
+  if entity == nil then return false end
+
+  if entity.shoot_target ~= nil then
+    local new_bullet = {
+      source = "entity " .. ename,
+      x = entity.x,
+      y = entity.y,
+      flying = true,
+    }
+
+    if entity.shoot_target.type == "entity" then
+      local ent = get_entity(entity.shoot_target.name)
+      if ent == nil then
+        entity.shoot_target = nil
+        return
+      end
+
+      new_bullet.target = {
+        type = "entity",
+        name = entity.shoot_target.name
+      }
+    elseif entity.shoot_target.type == "pos" then
+      new_bullet.target = {
+        type = "pos",
+        x = entity.shoot_target.x,
+        y = entity.shoot_target.y
+      }
+    elseif entity.shoot_target.type == "player" then
+      local player = world.players[entity.shoot_target.name]
+      if player == nil then
+        entity.shoot_target = nil
+        return
+      end
+
+      new_bullet.target = {
+        type = "player",
+        name = entity.shoot_target.name
+      }
+    else
+      new_bullet.target = {
+        type = "pos",
+        x = 0,
+        y = 0
+      }
+    end
+
+    table.insert(world.bullets,new_bullet)
+  end
+end
+
 function check_collision(x,y,w,h,xo,yo,wo,ho)
   local x_coll = (x <= xo and (x + w / 2 >= xo - wo / 2)) or (x >= xo and (x - w / 2 <= xo + wo / 2))
   local y_coll = (y <= yo and (y + h / 2 >= yo - ho / 2)) or (y >= yo and (y - h / 2 <= yo + ho / 2))
@@ -1375,24 +1471,28 @@ function check_all_collisions(x,y,w,h)
   return collisions
 end
 
+function adjust_pos_for_collisions(pos,w,h)
+  local collisions = check_all_collisions(pos.x,pos.y,w,h)
+
+  for _,collision in pairs(collisions) do
+    pos.arrived = false
+    if collision.side == 1 then
+      pos.x = collision.obj.x + collision.obj.w / 2 + w / 2
+    elseif collision.side == 2 then
+      pos.y = collision.obj.y + collision.obj.h / 2 + h / 2
+    elseif collision.side == 3 then
+      pos.x = collision.obj.x - collision.obj.w / 2 - w / 2
+    elseif collision.side == 4 then
+      pos.y = collision.obj.y - collision.obj.h / 2 - h / 2
+    end
+  end
+end
+
 ----> Update player
 function update_player(player,tick)
   if player.move_target ~= nil then
     local new_pos = new_pos(player.x,player.y,player.move_target.x,player.move_target.y,MOVE_SPEED)
-    local collisions = check_all_collisions(new_pos.x,new_pos.y,PLAYER_L,PLAYER_L)
-
-    for _,collision in pairs(collisions) do
-      new_pos.arrived = false
-      if collision.side == 1 then
-        new_pos.x = collision.obj.x + collision.obj.w / 2 + PLAYER_L / 2
-      elseif collision.side == 2 then
-        new_pos.y = collision.obj.y + collision.obj.h / 2 + PLAYER_L / 2
-      elseif collision.side == 3 then
-        new_pos.x = collision.obj.x - collision.obj.w / 2 - PLAYER_L / 2
-      elseif collision.side == 4 then
-        new_pos.y = collision.obj.y - collision.obj.h / 2 - PLAYER_L / 2
-      end
-    end
+    adjust_pos_for_collisions(new_pos,PLAYER_L,PLAYER_L)
     
     player.x = new_pos.x
     player.y = new_pos.y
@@ -1647,6 +1747,8 @@ function resolve_bullet(bullet)
   -- Create hit particle
   local source = bullet.source
   local source_parts = split_spaces(source)
+  log_info("resolving bullet")
+  log_info(json.encode(bullet))
   if source_parts[1] == "player" then
     if world.players[source_parts[2]] ~= nil then
       local player = world.players[source_parts[2]]
@@ -1658,6 +1760,14 @@ function resolve_bullet(bullet)
       if player.charge >= CHARGE_TO_UNLOCK then
         player.charge = CHARGE_TO_UNLOCK
         unlock_random(source_parts[2])
+      end
+    end
+  elseif source_parts[1] == "entity" then
+    if world.entities[source_parts[2]] ~= nil then
+      local entity = world.entities[source_parts[2]]
+      log_info(entity.damage)
+      if bullet.target.type == "entity" then
+        deal_entity_damage(bullet.target.name,entity.damage)
       end
     end
   end
@@ -1712,10 +1822,11 @@ function world_update()
 
     local entities = world.entities
     for ename,entity in pairs(entities) do
-      local parts = split_spaces(ename)
+      local parts = split_delim(ename,".")
+
+      -- Check minion ability is still active
       if entity.isa == "minion" then
         local player_name = parts[2]
-        -- Check summon is still active
 
         local active = false
         local summon_ability = parts[1]
@@ -1728,8 +1839,27 @@ function world_update()
 
         if not active then
           world.entities[ename] = nil
+          goto continue
         end
       end
+
+      -- Update entity
+      if entity.update ~= nil then
+        entity.update()
+      end
+
+      -- Entity shoot
+      if entity.shoot_target ~= nil then
+        local shoot_speed = entity.shoot_speed
+        local shoot_period = TPS / shoot_speed
+    
+        if entity.last_shoot == nil or world.tick - entity.last_shoot > shoot_period then
+          entity_shoot_bullet(ename)
+          entity.last_shoot = world.tick
+        end
+      end
+
+      ::continue::
     end
 
     local bullets = world.bullets
@@ -1848,6 +1978,7 @@ function world_load(world_deets)
         sprite = edef.sprite,
         visible = edef.visible,
         isa = edef.isa,
+        update = nil,
         hp = entitytype.hp,
         x = edef.x,
         y = edef.y,
@@ -2526,16 +2657,16 @@ end
 
 ----> Draw
 function ui_draw()
+  if ui["charge_bar"] ~= nil and ui["charge_bar"].visible then
+    ui_draw_charge_bar()
+  end
+
   if ui["abilities"] ~= nil and ui["abilities"].visible then
     ui_draw_abilities()
   end
 
   if ui["abilities_book"] ~= nil and ui["abilities_book"].visible then
     ui_draw_abilities_book()
-  end
-
-  if ui["charge_bar"] ~= nil and ui["charge_bar"].visible then
-    ui_draw_charge_bar()
   end
 end
 
