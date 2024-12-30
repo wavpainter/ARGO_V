@@ -58,6 +58,23 @@ local AbilityKey = {
   ["t"] = 10,
 }
 local BIGNUM = 1000000
+local DEFAULT_USERNAME = "jason"
+local MOVE_DELAY_S = 0.15
+local PLAYER_L = 75
+local DROP_L = 40
+local MOVE_SPEED = 800
+local PLAYER_HP = 1000
+local BULLET_SPEED = 1500
+local BULLET_RADIUS = 10
+local INTERACT_DIST = 100
+local TPS = 60
+local CHARGE_TO_UNLOCK = 8
+local MAX_UNLOCKED = 3
+local OFFSET_X = 0
+local OFFSET_Y = -20
+local ENTITY_FOLLOW_THRESH = 250
+local ENTITY_FOLLOW_DIST = 100
+local ENTITY_JUMP_DIST = 1000
 
 local Images = {
   ["bin"] = "bin.png",
@@ -170,6 +187,7 @@ local Abilities = {
     target = false,
     channel = false,
     stationary = false,
+    duration = 10,
     use = function(world,player) return nil end
   },
   ["stun"] = {
@@ -224,6 +242,8 @@ local Entities = {
     enemy = true,
     targetable = true,
     ephemeral = false,
+    shoot_speed = 1,
+    damage = 10,
     hp = 200,
     drops = {
       {
@@ -388,24 +408,10 @@ local DEFAULT_PLAYER = {
   },
   avatar = "jason",
   shoot_speed = 4,
-  damage = 10
+  damage = 10,
+  hp = PLAYER_HP
 }
-local DEFAULT_USERNAME = "jason"
-local MOVE_DELAY_S = 0.15
-local PLAYER_L = 75
-local DROP_L = 40
-local MOVE_SPEED = 600
-local BULLET_SPEED = 1500
-local BULLET_RADIUS = 10
-local INTERACT_DIST = 100
-local TPS = 60
-local CHARGE_TO_UNLOCK = 8
-local MAX_UNLOCKED = 3
-local OFFSET_X = 0
-local OFFSET_Y = -20
-local ENTITY_FOLLOW_THRESH = 250
-local ENTITY_FOLLOW_DIST = 100
-local ENTITY_JUMP_DIST = 1000
+
 
 ----> UI
 local Anchor = {
@@ -635,6 +641,31 @@ Abilities["summon"].use = function(world,player)
 
   a.draw = function()
 
+  end
+
+  return a
+end
+
+Abilities["reflect"].use = function(world,player)
+  local a = {}
+  a.t0 = world.tick
+  a.tf = world.tick + Abilities["rage"].duration * TPS
+  a.id = id()
+  a.rad = math.sqrt(2*(PLAYER_L/2)^2)
+
+  a.update = function()
+    if world.tick > a.tf then
+      return false
+    else
+      return true
+    end
+  end
+
+  a.draw = function()
+    local pos = world_to_screen(player.x,player.y)
+
+    love.graphics.setColor(1,0.2,0,0.2)
+    love.graphics.circle("fill",pos.x,pos.y,a.rad)
   end
 
   return a
@@ -966,7 +997,7 @@ function ui_add_game()
   ui["abilities"] = {
     visible = true,
     anchor = Anchor.BOTTOM,
-    x_off = 10,
+    x_off = 0,
     y_off = -10,
     w = UI_ABILITY_LEN * 5 + UI_ABILITY_MARGIN * 4,
     h = UI_ABILITY_LEN * 2 + UI_ABILITY_MARGIN
@@ -986,8 +1017,17 @@ function ui_add_game()
   ui["charge_bar"] = {
     visible = true,
     anchor = Anchor.BOTTOM,
-    x_off = 10,
-    y_off = -10 - ui["abilities"].h - 10,
+    x_off = 0,
+    y_off = ui["abilities"].y_off - ui["abilities"].h - 10,
+    w = ui["abilities"].w,
+    h = 20
+  }
+
+  ui["health_bar"] = {
+    visible = true,
+    anchor = Anchor.BOTTOM,
+    x_off = 0,
+    y_off = ui["charge_bar"].y_off - ui["charge_bar"].h - 10,
     w = ui["abilities"].w,
     h = 20
   }
@@ -998,6 +1038,7 @@ function ui_remove_game()
   ui["abilities"] = nil
   ui["abilities_book"] = nil
   ui["charge_bar"] = nil
+  ui["health_bar"] = nil
 end
 
 
@@ -1184,6 +1225,37 @@ function draw_background(bg,x,y)
         love.graphics.rectangle('fill',x,y,tilew,tileh)
       end
     end
+  end
+end
+
+----> Create entity update
+function create_entity_update(entity)
+  if entity.isa == "skeleton" then
+    return function()
+      if not entity.shooting then
+        entity.shooting = true
+      end
+
+      local closest_player = nil
+      local min_dist = nil
+      for username,player in pairs(world.players) do
+        local d = euclid(player.x,player.y,entity.x,entity.y)
+
+        if closest_player == nil or d < min_dist then
+          closest_player = username
+          min_dist = d
+        end
+      end
+
+      if closest_player ~= nil then
+        entity.shoot_target = {
+          type = "player",
+          name = closest_player
+        }
+      end
+    end
+  else
+    return function() end
   end
 end
 
@@ -1709,6 +1781,24 @@ function deal_entity_damage(ename,dmg,interrupt)
   end
 end
 
+----> Deal player damage
+function deal_player_damage(username,dmg,interrupt)
+  if interrupt == nil then interrupt = false end
+
+  local player = world.players[username]
+  if player == nil then return end
+
+  player.hp = player.hp - dmg
+
+  create_hit_particle(dmg,player.x,player.y,PLAYER_L/2 + 20)
+  
+  -- Die
+  if player.hp <= 0 then
+    -- Remove the entity
+    world_join(username)
+  end
+end
+
 ----> Unlock a random ability
 function unlock_random(username,exclude,reset_charge)
   if reset_charge == nil then reset_charge = true end
@@ -1747,8 +1837,6 @@ function resolve_bullet(bullet)
   -- Create hit particle
   local source = bullet.source
   local source_parts = split_spaces(source)
-  log_info("resolving bullet")
-  log_info(json.encode(bullet))
   if source_parts[1] == "player" then
     if world.players[source_parts[2]] ~= nil then
       local player = world.players[source_parts[2]]
@@ -1768,6 +1856,8 @@ function resolve_bullet(bullet)
       log_info(entity.damage)
       if bullet.target.type == "entity" then
         deal_entity_damage(bullet.target.name,entity.damage)
+      elseif bullet.target.type == "player" then
+        deal_player_damage(bullet.target.name,entity.damage,false)
       end
     end
   end
@@ -1824,6 +1914,11 @@ function world_update()
     for ename,entity in pairs(entities) do
       local parts = split_delim(ename,".")
 
+      -- Update entity
+      if entity.update ~= nil then
+        entity.update()
+      end
+
       -- Check minion ability is still active
       if entity.isa == "minion" then
         local player_name = parts[2]
@@ -1843,13 +1938,10 @@ function world_update()
         end
       end
 
-      -- Update entity
-      if entity.update ~= nil then
-        entity.update()
-      end
-
       -- Entity shoot
       if entity.shoot_target ~= nil then
+        log_info(ename .. " is shooting")
+        log_info(entity.shoot_speed)
         local shoot_speed = entity.shoot_speed
         local shoot_period = TPS / shoot_speed
     
@@ -1864,6 +1956,7 @@ function world_update()
 
     local bullets = world.bullets
     for i,bullet in pairs(bullets) do
+      local source_parts = split_spaces(bullet.source)
 
       if bullet.target ~= nil then
         local p = nil
@@ -1876,6 +1969,14 @@ function world_update()
           p = new_pos(bullet.x,bullet.y,ent.x,ent.y,BULLET_SPEED)
         elseif bullet.target.type == "pos" then
           p = new_pos(bullet.x,bullet.y,bullet.target.x,bullet.target.y,BULLET_SPEED)
+        elseif bullet.target.type == "player" then
+          local player = world.players[bullet.target.name]
+          if player == nil then
+            bullets[i] = nil
+            goto continue
+          end
+
+          p = new_pos(bullet.x,bullet.y,player.x,player.y,BULLET_SPEED)
         else return
         end
 
@@ -1894,8 +1995,24 @@ function world_update()
       end
 
       if not bullet.flying then
-        resolve_bullet(bullet)
-        bullets[i] = nil
+        local has_reflect = false
+
+        if bullet.target.type == "player" then
+          local player = world.players[bullet.target.name]
+
+          for i,abil in pairs(player.active_abilities["reflect"]) do
+            has_reflect = true
+          end
+        end
+
+        if has_reflect then
+          bullet.target.type = source_parts[1]
+          bullet.target.name = source_parts[2]
+          bullet.flying = true
+        else
+          resolve_bullet(bullet)
+          bullets[i] = nil 
+        end
       end
       ::continue::
     end
@@ -1974,17 +2091,21 @@ function world_load(world_deets)
   if world_deets.entities ~= nil then
     for ename,edef in pairs(world_deets.entities) do
       local entitytype = Entities[edef.isa]
+      log_info(json.encode(edef))
       new_world_entities[ename] = {
         sprite = edef.sprite,
         visible = edef.visible,
+        shoot_speed = entitytype.shoot_speed,
+        damage = entitytype.damage,
         isa = edef.isa,
-        update = nil,
         hp = entitytype.hp,
         x = edef.x,
         y = edef.y,
         w = edef.w,
         h = edef.h
       }
+
+      new_world_entities[ename].update = create_entity_update(new_world_entities[ename])
     end
   end
   
@@ -2041,6 +2162,7 @@ function world_join(username)
     avatar = DEFAULT_PLAYER.avatar,
     shoot_speed = DEFAULT_PLAYER.shoot_speed,
     damage = DEFAULT_PLAYER.damage,
+    hp = DEFAULT_PLAYER.hp,
     charge = 0,
     drops = {},
     x = spawn.x,
@@ -2654,11 +2776,29 @@ function ui_draw_charge_bar()
   love.graphics.rectangle("fill",p0.x,p0.y,charge_ratio * uidef.w,uidef.h)
 end
 
+function ui_draw_health_bar()
+  local uidef = ui["health_bar"]
+
+  local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
+
+  local player = world.players[DEFAULT_USERNAME]
+
+  local health_ratio = player.hp / PLAYER_HP
+
+  love.graphics.setColor(0,0,0)
+  love.graphics.rectangle("fill",p0.x,p0.y,uidef.w,uidef.h)
+  love.graphics.setColor(0,1,0)
+  love.graphics.rectangle("fill",p0.x,p0.y,health_ratio * uidef.w,uidef.h)
+end
 
 ----> Draw
 function ui_draw()
   if ui["charge_bar"] ~= nil and ui["charge_bar"].visible then
     ui_draw_charge_bar()
+  end
+
+  if ui["health_bar"] ~= nil and ui["health_bar"].visible then
+    ui_draw_health_bar()
   end
 
   if ui["abilities"] ~= nil and ui["abilities"].visible then
