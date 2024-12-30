@@ -230,6 +230,8 @@ local Entities = {
     enemy = true,
     targetable = true,
     ephemeral = false,
+    damage = 1,
+    shoot_speed = 1,
     hp = 987654321,
     drops = {
       {
@@ -242,7 +244,7 @@ local Entities = {
     enemy = true,
     targetable = true,
     ephemeral = false,
-    shoot_speed = 1,
+    shoot_speed = 1.5,
     damage = 10,
     hp = 200,
     drops = {
@@ -1231,6 +1233,30 @@ end
 ----> Create entity update
 function create_entity_update(entity)
   if entity.isa == "skeleton" then
+    return function()
+      if not entity.shooting then
+        entity.shooting = true
+      end
+
+      local closest_player = nil
+      local min_dist = nil
+      for username,player in pairs(world.players) do
+        local d = euclid(player.x,player.y,entity.x,entity.y)
+
+        if closest_player == nil or d < min_dist then
+          closest_player = username
+          min_dist = d
+        end
+      end
+
+      if closest_player ~= nil then
+        entity.shoot_target = {
+          type = "player",
+          name = closest_player
+        }
+      end
+    end
+  elseif entity.isa == "dummy" then
     return function()
       if not entity.shooting then
         entity.shooting = true
