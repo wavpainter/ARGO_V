@@ -97,7 +97,8 @@ local Images = {
   ["stab"] = "stab.png",
   ["lectern"] = "lectern.png",
   ["lock"] = "lock.png",
-  ["summon"] = "summon.png"
+  ["summon"] = "summon.png",
+  ["summon2"] = "summon.png"
 }
 local Abilities = {
   ["invis"] = {
@@ -158,15 +159,18 @@ local Abilities = {
     damage = 10,
     use = function(world,player) return nil end
   },
-  ["push"] = {
-    index = 6,
-    name = "Push",
+  ["summon2"] = {
+    index = 5,
+    name = "Summon2",
     description = "",
-    interrupt = true,
-    target = true,
-    range = 10,
+    interrupt = false,
+    target = false,
     channel = false,
-    stationary = true,
+    stationary = false,
+    duration = 20,
+    shoot_speed = 2,
+    range = 1,
+    damage = 10,
     use = function(world,player) return nil end
   },
   ["rage"] = {
@@ -385,7 +389,7 @@ local DEFAULT_PLAYER = {
       times_used = 0,
       slot = 5,
     },
-    ["push"] = {
+    ["summon2"] = {
       locked = true,
       times_used = 0,
       slot = 6,
@@ -637,6 +641,68 @@ Abilities["summon"].use = function(world,player)
   end
 
   world.entities["summon." .. player.username .. "." .. a.id] = entity
+
+  a.update = function()
+    if world.tick > a.tf then
+      return false
+    else
+      return true
+    end
+  end
+
+  a.draw = function()
+
+  end
+
+  return a
+end
+
+Abilities["summon2"].use = function(world,player)
+  local a = {}
+  a.t0 = world.tick
+  a.tf = world.tick + Abilities["summon2"].duration * TPS
+  a.id = id()
+  a.following = false
+
+  local entity = {
+    sprite = "summon2",
+    visible = true,
+    isa = "minion",
+    hp = 100,
+    shoot_target = nil,
+    last_shoot = nil,
+    shoot_speed = Abilities["summon2"].shoot_speed,
+    damage = Abilities["summon2"].damage,
+    range = Abilities["summon2"].range,
+    x = player.x,
+    y = player.y,
+    w = PLAYER_L,
+    h = PLAYER_L
+  }
+
+  entity.update = function()
+    local dist_to_player = euclid(entity.x,entity.y,player.x,player.y)
+    if dist_to_player > ENTITY_JUMP_DIST then
+      entity.x = player.x
+      entity.y = player.y
+    elseif dist_to_player > ENTITY_FOLLOW_THRESH then
+      a.following = true
+    elseif dist_to_player < ENTITY_FOLLOW_DIST then
+      a.following = false
+    end
+
+    if a.following then
+      local pos = new_pos(entity.x,entity.y,player.x,player.y,MOVE_SPEED)
+      adjust_pos_for_collisions(pos,entity.w,entity.h)
+
+      entity.x = pos.x
+      entity.y = pos.y
+    end
+
+    entity.shoot_target = player.shoot_target
+  end
+
+  world.entities["summon2." .. player.username .. "." .. a.id] = entity
 
   a.update = function()
     if world.tick > a.tf then
