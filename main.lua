@@ -98,7 +98,8 @@ local Images = {
   ["lectern"] = "lectern.png",
   ["lock"] = "lock.png",
   ["summon"] = "summon.png",
-  ["summon2"] = "summon.png"
+  ["summon2"] = "summon.png",
+  ["summon3"] = "summon.png"
 }
 local Abilities = {
   ["invis"] = {
@@ -148,20 +149,6 @@ local Abilities = {
   ["summon"] = {
     index = 5,
     name = "Summon",
-    description = "",
-    interrupt = false,
-    target = false,
-    channel = false,
-    stationary = false,
-    duration = 20,
-    shoot_speed = 2,
-    range = 1,
-    damage = 10,
-    use = function(world,player) return nil end
-  },
-  ["summon2"] = {
-    index = 5,
-    name = "Summon2",
     description = "",
     interrupt = false,
     target = false,
@@ -227,6 +214,34 @@ local Abilities = {
     channel = false,
     stationary = false,
     damage = 1000,
+    use = function(world,player) return nil end
+  },
+  ["summon2"] = {
+    index = 12,
+    name = "Summon2",
+    description = "",
+    interrupt = false,
+    target = false,
+    channel = false,
+    stationary = false,
+    duration = 20,
+    shoot_speed = 2,
+    range = 1,
+    damage = 10,
+    use = function(world,player) return nil end
+  },
+  ["summon3"] = {
+    index = 14,
+    name = "Summon 3",
+    description = "",
+    interrupt = false,
+    target = false,
+    channel = false,
+    stationary = false,
+    duration = 20,
+    shoot_speed = 2,
+    range = 1,
+    damage = 10,
     use = function(world,player) return nil end
   }
 }
@@ -364,56 +379,57 @@ local DEFAULT_WORLD = {
 }
 local DEFAULT_PLAYER = {
   abilities = {
-    ["invis"] = {
+    ["summon"] = {
       locked = true,
       times_used = 0,
       slot = 1,
     },
-    ["beam"] = {
+    ["summon2"] = {
       locked = true,
       times_used = 0,
       slot = 2,
     },
-    ["cantrip"] = {
+    ["summon3"] = {
       locked = true,
       times_used = 0,
-      slot = 3,
+      slot = 3
     },
-    ["root"] = {
+    ["invis"] = {
       locked = true,
       times_used = 0,
       slot = 4,
     },
-    ["summon"] = {
+    ["beam"] = {
       locked = true,
       times_used = 0,
       slot = 5,
     },
-    ["summon2"] = {
+    ["cantrip"] = {
       locked = true,
       times_used = 0,
       slot = 6,
     },
-    ["rage"] = {
+    ["root"] = {
       locked = true,
       times_used = 0,
-      slot = 7
+      slot = 7,
     },
-    ["reflect"] = {
+    ["rage"] = {
       locked = true,
       times_used = 0,
       slot = 8
     },
-    ["stun"] = {
+    ["reflect"] = {
       locked = true,
       times_used = 0,
       slot = 9
     },
-    ["pull"] = {
+    ["stun"] = {
       locked = true,
       times_used = 0,
       slot = 10
-    }
+    },
+    
   },
   avatar = "jason",
   shoot_speed = 4,
@@ -703,6 +719,68 @@ Abilities["summon2"].use = function(world,player)
   end
 
   world.entities["summon2." .. player.username .. "." .. a.id] = entity
+
+  a.update = function()
+    if world.tick > a.tf then
+      return false
+    else
+      return true
+    end
+  end
+
+  a.draw = function()
+
+  end
+
+  return a
+end
+
+Abilities["summon3"].use = function(world,player)
+  local a = {}
+  a.t0 = world.tick
+  a.tf = world.tick + Abilities["summon3"].duration * TPS
+  a.id = id()
+  a.following = false
+
+  local entity = {
+    sprite = "summon3",
+    visible = true,
+    isa = "minion",
+    hp = 100,
+    shoot_target = nil,
+    last_shoot = nil,
+    shoot_speed = Abilities["summon3"].shoot_speed,
+    damage = Abilities["summon3"].damage,
+    range = Abilities["summon3"].range,
+    x = player.x,
+    y = player.y,
+    w = PLAYER_L,
+    h = PLAYER_L
+  }
+
+  entity.update = function()
+    local dist_to_player = euclid(entity.x,entity.y,player.x,player.y)
+    if dist_to_player > ENTITY_JUMP_DIST then
+      entity.x = player.x
+      entity.y = player.y
+    elseif dist_to_player > ENTITY_FOLLOW_THRESH then
+      a.following = true
+    elseif dist_to_player < ENTITY_FOLLOW_DIST then
+      a.following = false
+    end
+
+    if a.following then
+      local pos = new_pos(entity.x,entity.y,player.x,player.y,MOVE_SPEED)
+      adjust_pos_for_collisions(pos,entity.w,entity.h)
+
+      entity.x = pos.x
+      entity.y = pos.y
+    end
+
+    entity.shoot_target = player.shoot_target
+  end
+
+  world.entities["summon3." .. player.username .. "." .. a.id] = entity
 
   a.update = function()
     if world.tick > a.tf then
