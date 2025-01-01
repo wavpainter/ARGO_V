@@ -250,9 +250,9 @@ local Entities = {
     enemy = true,
     targetable = true,
     ephemeral = false,
-    damage = 1,
-    shoot_speed = 1,
-    range = 1,
+    damage = 0,
+    shoot_speed = 0.5,
+    range = 0.8,
     hp = 987654321,
     drops = {
       {
@@ -1181,9 +1181,9 @@ end
 function ui_add_game()
   ui["abilities"] = {
     visible = true,
-    anchor = Anchor.BOTTOM,
-    x_off = 0,
-    y_off = -10,
+    anchor = Anchor.BOTTOM_LEFT,
+    x_off = 40,
+    y_off = -40,
     w = UI_ABILITY_LEN * 5 + UI_ABILITY_MARGIN * 4,
     h = UI_ABILITY_LEN * 2 + UI_ABILITY_MARGIN
   }
@@ -1201,8 +1201,8 @@ function ui_add_game()
 
   ui["charge_bar"] = {
     visible = true,
-    anchor = Anchor.BOTTOM,
-    x_off = 0,
+    anchor = Anchor.BOTTOM_LEFT,
+    x_off = 40,
     y_off = ui["abilities"].y_off - ui["abilities"].h - 10,
     w = ui["abilities"].w,
     h = 20
@@ -1212,9 +1212,9 @@ function ui_add_game()
     visible = true,
     anchor = Anchor.BOTTOM,
     x_off = 0,
-    y_off = ui["charge_bar"].y_off - ui["charge_bar"].h - 10,
-    w = ui["abilities"].w,
-    h = 20
+    y_off = -40,
+    w = 400,
+    h = 80
   }
 end
 
@@ -1630,7 +1630,11 @@ function world_draw()
   local bullets = world.bullets
   for _,bullet in pairs(bullets) do
     local bpos = world_to_screen(bullet.x,bullet.y)
-    love.graphics.setColor(1,0,0)
+    if bullet.target.type == "player" then
+      love.graphics.setColor(1,0,0)
+    else
+      love.graphics.setColor(0,0,1)
+    end
     love.graphics.circle("fill",bpos.x,bpos.y,BULLET_RADIUS)
   end
 
@@ -3108,7 +3112,7 @@ function ui_draw_charge_bar()
 
   local charge_ratio = player.charge / CHARGE_TO_UNLOCK
 
-  love.graphics.setColor(0,0,0)
+  love.graphics.setColor(0,0,0,0.25)
   love.graphics.rectangle("fill",p0.x,p0.y,uidef.w,uidef.h)
   love.graphics.setColor(0.3,0.6,1)
   love.graphics.rectangle("fill",p0.x,p0.y,charge_ratio * uidef.w,uidef.h)
@@ -3119,17 +3123,28 @@ function ui_draw_health_bar()
 
   local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
 
+  local default_font = love.graphics.newFont()
+  local large_font = love.graphics.newFont(20)
+
   local player = world.players[DEFAULT_USERNAME]
 
   local health_ratio = player.hp / PLAYER_HP
 
-  love.graphics.setColor(0,0,0)
+  love.graphics.setFont(large_font)
+  local text = "HP: " .. player.hp .. " / " .. tostring(PLAYER_HP)
+  local th = large_font:getHeight(text)
+  local tw = large_font:getWidth("HP: 1000 / 1000")
+
+  love.graphics.setColor(0,0,0,0.25)
   love.graphics.rectangle("fill",p0.x,p0.y,uidef.w,uidef.h)
   love.graphics.setColor(0,1,0)
   love.graphics.rectangle("fill",p0.x,p0.y,health_ratio * uidef.w,uidef.h)
 
+  love.graphics.rectangle("fill",p0.x + uidef.w/2 - tw/2 - 2, p0.y + uidef.h/2 - th/2 - 2, tw + 4, th + 4)
+
   love.graphics.setColor(0,0,0)
-  love.graphics.print("HP: " .. player.hp .. " / " .. tostring(PLAYER_HP),p0.x + 10,p0.y + 2)
+  love.graphics.print(text,p0.x + uidef.w / 2 - tw/2,p0.y + uidef.h / 2 - th/2)
+  love.graphics.setFont(default_font)
 end
 
 ----> Draw
