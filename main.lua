@@ -298,6 +298,7 @@ local DEFAULT_WORLD = {
       sprite = "dummy",
       visible = "true",
       isa = "dummy",
+      zone = "B",
       x = -200,
       y = -200,
       w = 80,
@@ -307,6 +308,7 @@ local DEFAULT_WORLD = {
       sprite = "dummy",
       visible = "true",
       isa = "dummy",
+      zone = "B",
       x = 0,
       y = -200,
       w = 80,
@@ -316,6 +318,7 @@ local DEFAULT_WORLD = {
       sprite = "skeleton",
       visible = "true",
       isa = "skeleton",
+      zone = "B",
       x = 200,
       y = -200,
       w = 80,
@@ -325,6 +328,7 @@ local DEFAULT_WORLD = {
       sprite = "skeleton",
       visible = "true",
       isa = "skeleton",
+      zone = "B",
       x = 400,
       y = -200,
       w = 80,
@@ -334,6 +338,7 @@ local DEFAULT_WORLD = {
       sprite = "skeleton",
       visible = "true",
       isa = "skeleton",
+      zone = "B",
       x = 600,
       y = -200,
       w = 80,
@@ -1881,6 +1886,7 @@ function update_player(player,tick)
         for i,region in pairs(zone.regions) do
           if region.x1 < player.x and player.x < region.x2 and region.y1 < player.y and player.y < region.y2 then
             player.discovered_zones[name] = true
+            zone.discovered = true
             log_info("Discovered " .. name)
             goto continuezone
           end
@@ -2191,6 +2197,10 @@ function world_update()
     for ename,entity in pairs(entities) do
       local parts = split_delim(ename,".")
 
+      if entity.zone ~= nil and not world.zones[entity.zone].discovered then
+        goto continue
+      end
+
       -- Update entity
       if entity.update ~= nil then
         entity.update()
@@ -2326,6 +2336,7 @@ function get_world_deets()
         sprite = e.sprite,
         visible = e.visible,
         isa = e.isa,
+        zone = e.zone,
         x = e.x,
         y = e.y,
         w = e.w,
@@ -2334,11 +2345,32 @@ function get_world_deets()
     end
   end
 
+  local world_zones = {}
+  if world.zones ~= nil then
+    for name,zone in pairs(world.zones) do
+      local new_zone = {
+        regions = {}
+      }
+      
+      for i,region in pairs(zone.regions) do
+        new_zone.regions[i] = {
+          x1 = region.x1,
+          x2 = region.x2,
+          y1 = region.y1,
+          y2 = region.y2
+        }
+      end
+
+      world_zones[name] = new_zone
+    end
+  end
+
   local world_deets = {
     spawn = {
       x = world.spawn.x,
       y = world.spawn.y,
     },
+    zones = world_zones,
     background = world.background,
     entities = world_ents,
     objects = world_objs
@@ -2379,6 +2411,7 @@ function world_load(world_deets)
         damage = entitytype.damage,
         range = entitytype.range,
         isa = edef.isa,
+        zone = edef.zone,
         hp = entitytype.hp,
         x = edef.x,
         y = edef.y,
