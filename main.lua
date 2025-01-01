@@ -8,7 +8,8 @@ local Color = {
   ["blue"] = { 0, 0, 1 },
   ["black"] = { 0, 0, 0 },
   ["white"] = { 1, 1, 1 },
-  ["lightgrey"] = {0.8, 0.8, 0.8}
+  ["lightgrey"] = {0.8, 0.8, 0.8},
+  ["darkgrey"] = {0.2,0.2,0.2}
 }
 
 local Alphabet = "abcdefghijklmnopqrstuvwxyz"
@@ -99,7 +100,9 @@ local Images = {
   ["lock"] = "lock.png",
   ["summon"] = "summon.png",
   ["summon2"] = "summon.png",
-  ["summon3"] = "summon.png"
+  ["summon3"] = "summon.png",
+  ["ceiling"] = "ceiling.jpg",
+  ["floor"] = "floor.jpg"
 }
 local Abilities = {
   ["invis"] = {
@@ -293,6 +296,7 @@ local Objects = {
 local DEFAULT_WORLD = {
   spawn = {x = 0, y = 0 },
   background = "tiles lightgrey white 100 100",
+  fog = "tiles black darkgrey 80 80",
   entities = {
     ["dummy1"] = {
       sprite = "dummy",
@@ -1410,6 +1414,33 @@ function draw_background(bg,x,y)
         love.graphics.rectangle('fill',x,y,tilew,tileh)
       end
     end
+  elseif pattern[1] == "tesselate" then
+    local sprite = pattern[2]
+    local img = get_image(sprite)
+    local tilew = tonumber(pattern[3])
+    local tileh = tonumber(pattern[4])
+
+    local x1 = x - w/2
+    local y1 = y - h/2
+    local x2 = x + w/2
+    local y2 = y + h/2
+    
+    local i1 = math.floor(x1 / tilew)
+    local i2 = math.ceil(x2 / tilew)
+    local j1 = math.floor(y1 / tileh)
+    local j2 = math.ceil(y2 / tileh)
+    
+    for i = i1,i2,1 do
+      for j = j1,j2,1 do
+        local x = i*tilew - x1
+        local y = j*tileh - y1
+        local xscale = tilew / img.w
+        local yscale = tileh / img.h
+        
+        love.graphics.setColor(1,1,1,1)
+        love.graphics.draw(img.img,x,y,0,xscale,yscale)
+      end
+    end
   end
 end
 
@@ -1640,13 +1671,13 @@ function world_draw()
 
   world_draw_objects("above")
 
-  -- Blackout undiscovered zones
-  local canvas = love.graphics.newCanvas(love.graphics.getWidth(),love.graphics.getHeight())
+  -- Create fog mask
+  local maskcanvas = love.graphics.newCanvas(love.graphics.getWidth(),love.graphics.getHeight())
   
-  love.graphics.setCanvas(canvas)
-  love.graphics.clear(0,0,0,0)
-  love.graphics.setBlendMode("alpha","premultiplied")
-  love.graphics.setColor(1,1,1)
+  love.graphics.setCanvas(maskcanvas)
+  love.graphics.clear(1,1,1,1)
+  love.graphics.setBlendMode("multiply","premultiplied")
+  love.graphics.setColor(0,0,0,0)
   for zname,_ in pairs(player.discovered_zones) do
     local zone = world.zones[zname]
     for i,region in pairs(zone.regions) do
@@ -1657,11 +1688,27 @@ function world_draw()
       love.graphics.rectangle("fill",p1.x,p1.y,w,h)
     end
   end
-  love.graphics.setCanvas()
-  love.graphics.setBlendMode("multiply","premultiplied")
-  love.graphics.draw(canvas)
 
+  -- Create fog
+  local fogcanvas = love.graphics.newCanvas(love.graphics.getWidth(),love.graphics.getHeight())
+  love.graphics.setCanvas(fogcanvas)
+  love.graphics.clear(0,0,0,1)
   love.graphics.setBlendMode("alpha")
+  love.graphics.setColor(1,0,0,1)
+  if world.fog ~= nil then
+    draw_background(world.fog,player.x - OFFSET_X,player.y - OFFSET_Y)
+  end
+
+  -- Apply mask
+  love.graphics.setBlendMode("multiply","premultiplied")
+  love.graphics.setColor(1,1,1,1)
+  love.graphics.draw(maskcanvas)
+
+  love.graphics.setCanvas()
+  love.graphics.setBlendMode("alpha")
+  love.graphics.setColor(1,1,1,1)
+  love.graphics.draw(fogcanvas)
+
 
 end
 
@@ -2376,6 +2423,7 @@ function get_world_deets()
     },
     zones = world_zones,
     background = world.background,
+    fog = world.fog,
     entities = world_ents,
     objects = world_objs
   }
@@ -2456,6 +2504,7 @@ function world_load(world_deets)
     },
     zones = new_world_zones,
     background = world_deets.background,
+    fog = world_deets.fog,
     players = {},
     objects = new_world_objs,
     entities = new_world_entities,
