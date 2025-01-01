@@ -375,7 +375,36 @@ local DEFAULT_WORLD = {
         h = 100
       }
     }
- }
+  },
+  zones = {
+    ["A"] = {
+      regions = {
+        [1] = {
+         x1 = -400,
+         x2 = 400,
+         y1 = -400,
+         y2 = 400
+        }
+      }
+    },
+    ["B"] = {
+      regions = {
+        [1] = {
+          x1 = -1200,
+          x2 = -400,
+          y1 = -400,
+          y2 = 400
+         },
+        [2] = {
+          x1 = 400,
+          x2 = 1200,
+          y1 = -400,
+          y2 = 400
+        }
+
+      }
+    }
+  }
 }
 local DEFAULT_PLAYER = {
   abilities = {
@@ -1602,6 +1631,29 @@ function world_draw()
 
   world_draw_objects("above")
 
+  -- Blackout undiscovered zones
+  local canvas = love.graphics.newCanvas(love.graphics.getWidth(),love.graphics.getHeight())
+  
+  love.graphics.setCanvas(canvas)
+  love.graphics.clear(0,0,0,0)
+  love.graphics.setBlendMode("alpha","premultiplied")
+  love.graphics.setColor(1,1,1)
+  for zname,_ in pairs(player.discovered_zones) do
+    local zone = world.zones[zname]
+    for i,region in pairs(zone.regions) do
+      local p1 = world_to_screen(region.x1,region.y1)
+      local w = region.x2 - region.x1
+      local h = region.y2 - region.y1
+
+      love.graphics.rectangle("fill",p1.x,p1.y,w,h)
+    end
+  end
+  love.graphics.setCanvas()
+  love.graphics.setBlendMode("multiply","premultiplied")
+  love.graphics.draw(canvas)
+
+  love.graphics.setBlendMode("alpha")
+
 end
 
 ----> Have player shoot at something
@@ -1819,6 +1871,23 @@ function update_player(player,tick)
           player.last_shoot = tick
         end
       end
+    end
+  end
+
+  -- Discover zones
+  if world.zones ~= nil then
+    for name,zone in pairs(world.zones) do
+      if not player.discovered_zones[name] then
+        for i,region in pairs(zone.regions) do
+          if region.x1 < player.x and player.x < region.x2 and region.y1 < player.y and player.y < region.y2 then
+            player.discovered_zones[name] = true
+            log_info("Discovered " .. name)
+            goto continuezone
+          end
+        end
+      end
+
+      ::continuezone::
     end
   end
 
@@ -2320,6 +2389,27 @@ function world_load(world_deets)
       new_world_entities[ename].update = create_entity_update(new_world_entities[ename])
     end
   end
+
+  local new_world_zones = {}
+  if world_deets.zones ~= nil then
+    for name,zone in pairs(world_deets.zones) do
+      local new_zone = {
+        discovered = false,
+        regions = {}
+      }
+      
+      for i,region in pairs(zone.regions) do
+        new_zone.regions[i] = {
+          x1 = region.x1,
+          x2 = region.x2,
+          y1 = region.y1,
+          y2 = region.y2
+        }
+      end
+
+      new_world_zones[name] = new_zone
+    end
+  end
   
   local new_world = {
     tick = 0,
@@ -2327,6 +2417,7 @@ function world_load(world_deets)
       x = world_deets.spawn.x,
       y = world_deets.spawn.y,
     },
+    zones = new_world_zones,
     background = world_deets.background,
     players = {},
     objects = new_world_objs,
@@ -2376,6 +2467,7 @@ function world_join(username)
     damage = DEFAULT_PLAYER.damage,
     hp = DEFAULT_PLAYER.hp,
     range = DEFAULT_PLAYER.range,
+    discovered_zones = {},
     charge = 0,
     drops = {},
     x = spawn.x,
