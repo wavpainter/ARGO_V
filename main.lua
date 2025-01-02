@@ -516,6 +516,7 @@ local loaded_images = nil
 ----> World
 local world = nil
 local world_dbg_tick = nil
+local world_dbg_showfog = nil
 
 ----> Game
 local game_keyhandlers = nil
@@ -1339,6 +1340,7 @@ end
 function world_init()
   world = nil
   world_dbg_tick = nil
+  world_dbg_showfog = true
 end
 
 ----> Serialize world to a file
@@ -1671,44 +1673,45 @@ function world_draw()
 
   world_draw_objects("above")
 
-  -- Create fog mask
-  local maskcanvas = love.graphics.newCanvas(love.graphics.getWidth(),love.graphics.getHeight())
-  
-  love.graphics.setCanvas(maskcanvas)
-  love.graphics.clear(1,1,1,1)
-  love.graphics.setBlendMode("multiply","premultiplied")
-  love.graphics.setColor(0,0,0,0)
-  for zname,_ in pairs(player.discovered_zones) do
-    local zone = world.zones[zname]
-    for i,region in pairs(zone.regions) do
-      local p1 = world_to_screen(region.x1,region.y1)
-      local w = region.x2 - region.x1
-      local h = region.y2 - region.y1
+  if world_dbg_showfog then
+    -- Create fog mask
+    local maskcanvas = love.graphics.newCanvas(love.graphics.getWidth(),love.graphics.getHeight())
+    
+    love.graphics.setCanvas(maskcanvas)
+    love.graphics.clear(1,1,1,1)
+    love.graphics.setBlendMode("multiply","premultiplied")
+    love.graphics.setColor(0,0,0,0)
+    for zname,_ in pairs(player.discovered_zones) do
+      local zone = world.zones[zname]
+      for i,region in pairs(zone.regions) do
+        local p1 = world_to_screen(region.x1,region.y1)
+        local w = region.x2 - region.x1
+        local h = region.y2 - region.y1
 
-      love.graphics.rectangle("fill",p1.x,p1.y,w,h)
+        love.graphics.rectangle("fill",p1.x,p1.y,w,h)
+      end
     end
+
+    -- Create fog
+    local fogcanvas = love.graphics.newCanvas(love.graphics.getWidth(),love.graphics.getHeight())
+    love.graphics.setCanvas(fogcanvas)
+    love.graphics.clear(0,0,0,1)
+    love.graphics.setBlendMode("alpha")
+    love.graphics.setColor(1,0,0,1)
+    if world.fog ~= nil then
+      draw_background(world.fog,player.x - OFFSET_X,player.y - OFFSET_Y)
+    end
+
+    -- Apply mask
+    love.graphics.setBlendMode("multiply","premultiplied")
+    love.graphics.setColor(1,1,1,1)
+    love.graphics.draw(maskcanvas)
+
+    love.graphics.setCanvas()
+    love.graphics.setBlendMode("alpha")
+    love.graphics.setColor(1,1,1,1)
+    love.graphics.draw(fogcanvas)
   end
-
-  -- Create fog
-  local fogcanvas = love.graphics.newCanvas(love.graphics.getWidth(),love.graphics.getHeight())
-  love.graphics.setCanvas(fogcanvas)
-  love.graphics.clear(0,0,0,1)
-  love.graphics.setBlendMode("alpha")
-  love.graphics.setColor(1,0,0,1)
-  if world.fog ~= nil then
-    draw_background(world.fog,player.x - OFFSET_X,player.y - OFFSET_Y)
-  end
-
-  -- Apply mask
-  love.graphics.setBlendMode("multiply","premultiplied")
-  love.graphics.setColor(1,1,1,1)
-  love.graphics.draw(maskcanvas)
-
-  love.graphics.setCanvas()
-  love.graphics.setBlendMode("alpha")
-  love.graphics.setColor(1,1,1,1)
-  love.graphics.draw(fogcanvas)
-
 
 end
 
@@ -1850,7 +1853,129 @@ function check_all_collisions(x,y,w,h)
   return collisions
 end
 
+function get_fog_overlap(x,y,w,h)
+  local x1 = x - w/2
+  local x2 = x + w/2
+  local y1 = y - h/2
+  local y2 = y + h/2
+
+  local edge_points = {
+    { 
+      x = x2, 
+      y = y2,
+      outside = true,
+    },
+    {
+      x = x1, 
+      y = y2,
+      outside = true,
+    },
+    {
+      x = x1, 
+      y = y1,
+      outside = true,
+    },
+    { 
+      x = x2, 
+      y = y1,
+      outside = true,
+    }
+  }
+
+  local regions = {}
+
+  -- iterate through all regions checking edge points
+  for zname,zone in pairs(world.zones) do
+    for _,region in pairs(zone.regions) do
+      table.insert(regions,region)
+
+      for i,ep in pairs(edge_points) do
+        if region.x1 <= ep.x and ep.x <= region.x2 and region.y1 <= ep.y and ep.y <= region.y2 then
+          ep.outside = false
+        end
+      end
+    end
+  end
+
+  local outside_points = {}
+
+  for i,ep in pairs(edge_points) do
+    if ep.outside then
+      local dmin = nil
+      local dx = 0
+      local dy = 0
+      
+      for ir,region in pairs(regions) do
+        local dxr = 0
+
+        if ep.x > region.x2 then
+          -- Right of region
+          dxr = ep.x - region.x2
+
+        elseif ep.x < region.x1 then
+          -- Left or region
+          dxr = ep.x - region.x1
+        end
+
+        local dyr = 0
+
+        if ep.y > region.y2 then
+          -- Below region
+          dyr = ep.y - region.y2
+        elseif ep.y < region.y1 then
+          -- Above region
+          dyr = ep.y - region.y1
+        end
+
+        local d = math.sqrt(dxr^2 + dyr^2)
+        if dmin == nil or d < dmin then
+          dmin = d
+          dx = dxr
+          dy = dyr
+        end
+      end
+
+      table.insert(outside_points,{
+        dx = dx,
+        dy = dy
+      })
+    end
+  end
+
+  local furthest_point = nil
+  local furthest_dist = nil
+  for i,op in pairs(outside_points) do
+    local d = math.sqrt(op.dx^2 + op.dy^2)
+    if furthest_point == nil or d > furthest_dist then
+      furthest_dist = d
+      furthest_point = op
+    end
+  end
+
+  if furthest_point == nil then
+    return {
+      x = 0,
+      y = 0
+    }
+  else
+    return {
+      x = furthest_point.dx,
+      y = furthest_point.dy
+    }
+  end
+end
+
 function adjust_pos_for_collisions(pos,w,h)
+  local fog_overlap = get_fog_overlap(pos.x,pos.y,w,h)
+
+  if fog_overlap ~= nil then
+    pos.x = pos.x - fog_overlap.x
+    pos.y = pos.y - fog_overlap.y
+
+
+    pos.arrived = false
+  end
+
   local collisions = check_all_collisions(pos.x,pos.y,w,h)
 
   for _,collision in pairs(collisions) do
@@ -3497,6 +3622,15 @@ function debug_command(input_str)
     local savename = split_command[2]
     if savename ~= nil then
       load_world_from(savename)
+    end
+  elseif command == "fog" then
+    local show_hide = split_command[2]
+    if show_hide == "show" then
+      world_dbg_showfog = true
+    elseif show_hide == "hide" then
+      world_dbg_showfog = false
+    else
+      log_warning("fog [show | hide]")
     end
   else
     log_warning("Unknown command: " .. command)
