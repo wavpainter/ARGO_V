@@ -102,7 +102,9 @@ local Images = {
   ["summon2"] = "summon.png",
   ["summon3"] = "summon.png",
   ["ceiling"] = "ceiling.jpg",
-  ["floor"] = "floor.jpg"
+  ["floor"] = "floor.jpg",
+  ["smallrobot"] = "smallrobot.png",
+  ["bigbot"] = "bigbot.png"
 }
 local Abilities = {
   ["invis"] = {
@@ -257,6 +259,31 @@ local Entities = {
     shoot_speed = 0.5,
     range = 0.8,
     hp = 987654321,
+    drops = {
+      {
+        name = "ability cantrip",
+        rate = 1
+      }
+    }
+  },
+  ["meleebot"] = {
+    enemy = true,
+    targetable = true,
+    ephemeral = false,
+    damage = 10,
+    shoot_speed = 1,
+    range = 0.4,
+    hp = 200,
+    drops = {}
+  },
+  ["bigbot"] = {
+    enemy = true,
+    targetable = true,
+    ephemeral = false,
+    damage = 15,
+    shoot_speed = 1,
+    range = 0.9,
+    hp = 800,
     drops = {
       {
         name = "ability cantrip",

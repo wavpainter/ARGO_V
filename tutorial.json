@@ -30,7 +30,77 @@
             "w": 80,
             "h": 80,
             "visible": "true"
-        }
+        },
+        "botC1": {
+            "sprite": "smallrobot",
+            "isa": "meleebot",
+            "zone": "C",
+            "x": 5200,
+            "y": -400,
+            "w": 80,
+            "h": 80,
+            "visible": "true"
+        },
+        "botC2": {
+            "sprite": "smallrobot",
+            "isa": "meleebot",
+            "zone": "C",
+            "x": 5200,
+            "y": 0,
+            "w": 80,
+            "h": 80,
+            "visible": "true"
+        },
+        "botC3": {
+            "sprite": "smallrobot",
+            "isa": "meleebot",
+            "zone": "C",
+            "x": 5200,
+            "y": 400,
+            "w": 80,
+            "h": 80,
+            "visible": "true"
+        },
+        "botD1": {
+            "sprite": "smallrobot",
+            "isa": "meleebot",
+            "zone": "D",
+            "x": 7200,
+            "y": -400,
+            "w": 80,
+            "h": 80,
+            "visible": "true"
+        },
+        "botD2": {
+            "sprite": "bigbot",
+            "isa": "bigbot",
+            "zone": "D",
+            "x": 7200,
+            "y": 0,
+            "w": 80,
+            "h": 80,
+            "visible": "true"
+        },
+        "botD3": {
+            "sprite": "smallrobot",
+            "isa": "meleebot",
+            "zone": "D",
+            "x": 7200,
+            "y": 400,
+            "w": 80,
+            "h": 80,
+            "visible": "true"
+        },
+        "botD4": {
+            "sprite": "smallrobot",
+            "isa": "meleebot",
+            "zone": "D",
+            "x": 6800,
+            "y": 0,
+            "w": 80,
+            "h": 80,
+            "visible": "true"
+        },
     },
     "zones": {
         "A": {
