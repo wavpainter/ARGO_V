@@ -259,6 +259,7 @@ local Entities = {
     shoot_speed = 0.5,
     range = 0.8,
     hp = 987654321,
+    move_speed = 0,
     drops = {
       {
         name = "ability cantrip",
@@ -274,6 +275,7 @@ local Entities = {
     shoot_speed = 1,
     range = 0.4,
     hp = 200,
+    move_speed = 0.75,
     drops = {}
   },
   ["bigbot"] = {
@@ -284,6 +286,7 @@ local Entities = {
     shoot_speed = 1,
     range = 0.9,
     hp = 800,
+    move_speed = 0.5,
     drops = {
       {
         name = "ability cantrip",
@@ -299,6 +302,7 @@ local Entities = {
     damage = 10,
     range = 1,
     hp = 200,
+    move_speed = 0.75,
     drops = {
       {
         name = "ability stab",
@@ -311,6 +315,7 @@ local Entities = {
     targetable = true,
     ephemeral = true,
     hp = 100,
+    move_speed = 0.9,
     drops = {
     }
   }
@@ -325,55 +330,15 @@ local DEFAULT_WORLD = {
   background = "tiles lightgrey white 100 100",
   fog = "tiles black darkgrey 80 80",
   entities = {
-    ["dummy1"] = {
-      sprite = "dummy",
-      visible = "true",
-      isa = "dummy",
-      zone = "B",
-      x = -200,
-      y = -200,
-      w = 80,
-      h = 80
-    },
-    ["dummy2"] = {
-      sprite = "dummy",
-      visible = "true",
-      isa = "dummy",
-      zone = "B",
+    ["bot1"] = {
+      sprite = "smallrobot",
+      isa = "meleebot",
+      zone = "A",
       x = 0,
-      y = -200,
+      y = -500,
       w = 80,
-      h = 80
-    },
-    ["skele1"] = {
-      sprite = "skeleton",
-      visible = "true",
-      isa = "skeleton",
-      zone = "B",
-      x = 200,
-      y = -200,
-      w = 80,
-      h = 160
-    },
-    ["skele2"] = {
-      sprite = "skeleton",
-      visible = "true",
-      isa = "skeleton",
-      zone = "B",
-      x = 400,
-      y = -200,
-      w = 80,
-      h = 160
-    },
-    ["skele3"] = {
-      sprite = "skeleton",
-      visible = "true",
-      isa = "skeleton",
-      zone = "B",
-      x = 600,
-      y = -200,
-      w = 80,
-      h = 160
+      h = 80,
+      visible = true
     }
   },
   objects = { 
@@ -416,28 +381,11 @@ local DEFAULT_WORLD = {
     ["A"] = {
       regions = {
         [1] = {
-         x1 = -400,
-         x2 = 400,
-         y1 = -400,
-         y2 = 400
+         x1 = -10000,
+         x2 = 10000,
+         y1 = -10000,
+         y2 = 10000
         }
-      }
-    },
-    ["B"] = {
-      regions = {
-        [1] = {
-          x1 = -1200,
-          x2 = -400,
-          y1 = -400,
-          y2 = 400
-         },
-        [2] = {
-          x1 = 400,
-          x2 = 1200,
-          y1 = -400,
-          y2 = 400
-        }
-
       }
     }
   }
@@ -1475,56 +1423,50 @@ end
 
 ----> Create entity update
 function create_entity_update(entity)
-  if entity.isa == "skeleton" then
-    return function()
+  local edef = nil
+  if entity.isa ~= nil then
+    edef = Entities[entity.isa]
+  end
+  return function() 
+    if edef.enemy then
       if not entity.shooting then
         entity.shooting = true
       end
 
-      local closest_player = nil
-      local min_dist = nil
+      -- Get the nearest player
+      local nearest_player = nil
+      local nearest_dist = nil
       for username,player in pairs(world.players) do
         local d = euclid(player.x,player.y,entity.x,entity.y)
-
-        if closest_player == nil or d < min_dist then
-          closest_player = username
-          min_dist = d
+        if nearest_player == nil or d < nearest_dist then
+          nearest_player = player
+          nearest_dist = d
         end
       end
 
-      if closest_player ~= nil then
-        entity.shoot_target = {
-          type = "player",
-          name = closest_player
+      local pixelrange = get_pixel_range(entity.range)
+
+      -- Walk towards the player
+      if nearest_dist > 0.9 * pixelrange then
+        entity.moving = true
+      elseif nearest_dist < 0.75 * pixelrange then
+        entity.moving = false
+      end
+
+      if entity.moving then
+        entity.move_target = {
+          x = nearest_player.x,
+          y = nearest_player.y
         }
+      else
+        entity.move_target = nil
       end
+
+      entity.shoot_target = {
+        type = "player",
+        name = nearest_player.username
+      }
     end
-  elseif entity.isa == "dummy" then
-    return function()
-      if not entity.shooting then
-        entity.shooting = true
-      end
-
-      local closest_player = nil
-      local min_dist = nil
-      for username,player in pairs(world.players) do
-        local d = euclid(player.x,player.y,entity.x,entity.y)
-
-        if closest_player == nil or d < min_dist then
-          closest_player = username
-          min_dist = d
-        end
-      end
-
-      if closest_player ~= nil then
-        entity.shoot_target = {
-          type = "player",
-          name = closest_player
-        }
-      end
-    end
-  else
-    return function() end
   end
 end
 
@@ -2398,6 +2340,7 @@ function world_update()
 
     local entities = world.entities
     for ename,entity in pairs(entities) do
+      local etype = Entities[entity.isa]
       local parts = split_delim(ename,".")
 
       if entity.zone ~= nil and not world.zones[entity.zone].discovered then
@@ -2425,6 +2368,18 @@ function world_update()
         if not active then
           world.entities[ename] = nil
           goto continue
+        end
+      end
+
+      -- Entity move
+      if entity.move_target ~= nil then
+        local new_pos = new_pos(entity.x,entity.y,entity.move_target.x,entity.move_target.y,MOVE_SPEED * etype.move_speed)
+        adjust_pos_for_collisions(new_pos,PLAYER_L,PLAYER_L)
+        
+        entity.x = new_pos.x
+        entity.y = new_pos.y
+        if new_pos.arrived then
+          entity.move_target = nil
         end
       end
 
