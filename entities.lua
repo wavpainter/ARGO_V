@@ -237,8 +237,10 @@ function entities.update(world,entity)
   
     if entity.shooting and entity.shoot_target ~= nil then
       local shoot_speed = entity.shoot_speed
-      for _,rage in pairs(entity.active_abilities["rage"]) do
-        shoot_speed = shoot_speed * 2
+      if entity.active_abilities["rage"] ~= nil then
+        for _,rage in pairs(entity.active_abilities["rage"]) do
+          shoot_speed = shoot_speed * 2
+        end
       end
       local shoot_period = defs.TPS / shoot_speed
   
