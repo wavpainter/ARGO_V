@@ -76,8 +76,6 @@ local DROP_L = 40
 local BULLET_SPEED = 1500
 local BULLET_RADIUS = 10
 local INTERACT_DIST = 100
-local CHARGE_TO_UNLOCK = 8
-local MAX_UNLOCKED = 3
 local OFFSET_X = 0
 local OFFSET_Y = -20
 
@@ -269,7 +267,7 @@ abilities["rage"].use = function(world,entity)
 end
 
 abilities["cantrip"].use = function(world,entity)
-  unlock_random(entity,"cantrip",false)
+  entities.unlock_random(world,entity,"cantrip",false)
 end
 
 abilities["summon"].use = function(world,entity)
@@ -1416,81 +1414,17 @@ function adjust_pos_for_collisions(pos,w,h)
   end
 end
 
-----> Can use ability
-function can_use_ability(ename,ability_name)
-  local ability_def = abilities[ability_name]
-  local entity = world.entities[ename]
-  if ability_def == nil or entity == nil then return false end
-
-  if entity.abilities[ability_name].locked then return false end
-
-  if ability_def.target then
-    if entity.shoot_target == nil then
-      return false
-    end
-    
-    local target = world.entities[entity.shoot_target]
-    if target == nil or not target.alive then
-      return false
-    end
-
-    local pixelrange = ability_def.range * entity.move_speed * defs.MOVE_SPEED
-    local dist = utils.euclid(target.x,target.y,entity.x,entity.y)
-
-    if dist > pixelrange then
-      return false
-    end
-  end
-
-  return true
-end
-
 ----> Player uses ability
 function use_ability(entity_name,ability_num)
   local entity = world.entities[entity_name]
   if world ~= nil and entity ~= nil then
     local ability_name = entity.ability_map[ability_num]
-    local ability_def = abilities[ability_name]
-    if not can_use_ability(entity_name,ability_name) then
+    if not entities.can_use_ability(world,entity,ability_name) then
       log_info("Can't use" .. ability_name)
       return
     end
 
-    -- Lock ability
-    entity.abilities[ability_name].locked = true
-
-    -- Stationary ability
-    if ability_def.stationary then
-      entity.move_target = nil -- Stationary
-    end
-
-    -- Call use
-    local active_ability = ability_def.use(world,entity)
-    if active_ability == nil then
-      log_info("Failed to use " .. ability_name)
-      return
-    end
-
-    -- Unlock abilities
-    if entity.charge >= CHARGE_TO_UNLOCK then
-      unlock_random(entity_name)
-    end
-
-    -- Channel ability
-    if ability_def.channel then
-      entity.ability_channeling = active_ability
-      entity.shooting = false
-    else
-      entity.ability_channeling = nil
-    end
-
-    if active_ability ~= nil then
-      local id = active_ability.id
-      if id == nil then id = id() end
-
-      entity.active_abilities[ability_name][id] = active_ability
-      entity.abilities[ability_name].times_used = entity.abilities[ability_name].times_used + 1 -- Lua moment
-    end
+    entities.use_ability(world,entity,ability_name)
   end
 end
 
@@ -1555,36 +1489,6 @@ function deal_damage(ename,dmg,interrupt)
   end
 end
 
-----> Unlock a random ability
-function unlock_random(entity,exclude,reset_charge)
-  if reset_charge == nil then reset_charge = true end
-
-  if entity == nil or entity.abilities == nil then
-    return
-  end
-  
-  local n_unlocked = 0
-  local n_locked = 0
-  local locked_abils = {}
-  for aname,abil in pairs(entity.abilities) do
-    if not abil.locked then
-      n_unlocked = n_unlocked + 1
-    elseif abil.slot ~= -1 then
-      if exclude ~= aname then
-        table.insert(locked_abils,aname)
-        n_locked = n_locked + 1
-      end
-    end
-  end
-
-  if n_locked ~= 0 and n_unlocked < MAX_UNLOCKED then
-    local i = math.random(1,n_locked)
-    local unlocking = locked_abils[i]
-    if reset_charge then entity.charge = 0 end
-    entity.abilities[unlocking].locked = false
-  end
-end
-
 ----> Resolve bullet
 function resolve_bullet(bullet)
   -- Create hit particle
@@ -1592,9 +1496,9 @@ function resolve_bullet(bullet)
   if source ~= nil and source.alive then
 
     source.charge = source.charge + 1
-    if source.charge >= CHARGE_TO_UNLOCK then
-      source.charge = CHARGE_TO_UNLOCK
-      unlock_random(source)
+    if source.charge >= defs.CHARGE_TO_UNLOCK then
+      source.charge = defs.CHARGE_TO_UNLOCK
+      entities.unlock_random(world,source)
     end
 
     deal_damage(bullet.target,source.damage)
@@ -2194,7 +2098,7 @@ function ui_draw_abilities()
       love.graphics.setColor(1,1,1,1)
       love.graphics.draw(ability_img.img,p0.x + dx + m / 2, p0.y + dy+ m/2, 0, xscale, yscale)
 
-      if not can_use_ability(player.name,player_abilities[i]) then
+      if not entities.can_use_ability(world,player,player_abilities[i]) then
         love.graphics.setColor(1,0,0,0.5)
         love.graphics.rectangle("fill",p0.x + dx + m/2, p0.y + dy + m/2,imgl,imgl)
       end
@@ -2459,7 +2363,7 @@ function ui_draw_charge_bar()
 
   local player = world.entities[curr_entity]
 
-  local charge_ratio = player.charge / CHARGE_TO_UNLOCK
+  local charge_ratio = player.charge / defs.CHARGE_TO_UNLOCK
 
   love.graphics.setColor(0,0,0,0.25)
   love.graphics.rectangle("fill",p0.x,p0.y,uidef.w,uidef.h)

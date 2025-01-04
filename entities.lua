@@ -30,6 +30,13 @@ local Entities = {
       range = 0.4,
       max_hp = 200,
       move_speed = 0.75,
+      abilities = {
+        ["reflect"] = {
+          locked = true,
+          times_used = 0,
+          slot = 1,
+        }
+      },
       drops = {}
     },
     ["bigbot"] = {
@@ -94,7 +101,7 @@ function entities.create_player(sprite,x,y,w,h,abils,name)
 end
 
 function entities.create_summon(type,sprite,x,y,w,h,name,parent,parent_ability)
-  local entity = entities.create(type,sprite,true,nil,x,y,w,h,Entities[type].abils,name)
+  local entity = entities.create(type,sprite,true,nil,x,y,w,h,Entities[type].abilities,name)
   entity.parent = parent
   entity.parent_ability = parent_ability
   entity.summon = true
@@ -103,7 +110,7 @@ function entities.create_summon(type,sprite,x,y,w,h,name,parent,parent_ability)
 end
 
 function entities.create_enemy(type,sprite,visible,zone,x,y,w,h,name)
-  local entity = entities.create(type,sprite,visible,zone,x,y,w,h,Entities[type].abils,name)
+  local entity = entities.create(type,sprite,visible,zone,x,y,w,h,Entities[type].abilities,name)
   entity.enemy = true
   return entity
 end
@@ -201,6 +208,103 @@ function entities.shoot_bullet(world,entity)
 
     table.insert(world.bullets,new_bullet)
   end
+end
+
+function entities.unlock_random(world,entity,exclude,reset_charge)
+  if reset_charge == nil then reset_charge = true end
+
+  if entity == nil or entity.abilities == nil then
+    return
+  end
+  
+  local n_unlocked = 0
+  local n_locked = 0
+  local locked_abils = {}
+  for aname,abil in pairs(entity.abilities) do
+    if not abil.locked then
+      n_unlocked = n_unlocked + 1
+    elseif abil.slot ~= -1 then
+      if exclude ~= aname then
+        table.insert(locked_abils,aname)
+        n_locked = n_locked + 1
+      end
+    end
+  end
+
+  if n_locked ~= 0 and n_unlocked < defs.MAX_UNLOCKED then
+    local i = math.random(1,n_locked)
+    local unlocking = locked_abils[i]
+    if reset_charge then entity.charge = 0 end
+    entity.abilities[unlocking].locked = false
+  end
+end
+
+function entities.use_ability(world,entity,ability_name)
+  local ability_def = abilities[ability_name]
+
+  -- Lock ability
+  entity.abilities[ability_name].locked = true
+
+  -- Stationary ability
+  if ability_def.stationary then
+    entity.move_target = nil -- Stationary
+  end
+
+  -- Call use
+  local active_ability = ability_def.use(world,entity)
+  if active_ability == nil then
+    log_info("Failed to use " .. ability_name)
+    return
+  end
+
+  -- Unlock abilities
+  if entity.charge >= defs.CHARGE_TO_UNLOCK then
+    entities.unlock_random(world,entity)
+  end
+
+  -- Channel ability
+  if ability_def.channel then
+    entity.ability_channeling = active_ability
+    entity.shooting = false
+  else
+    entity.ability_channeling = nil
+  end
+
+  if active_ability ~= nil then
+    local id = active_ability.id
+    if id == nil then id = id() end
+
+    entity.active_abilities[ability_name][id] = active_ability
+    entity.abilities[ability_name].times_used = entity.abilities[ability_name].times_used + 1 -- Lua moment
+  end
+end
+
+----> Can use ability
+function entities.can_use_ability(world,entity,ability_name)
+  local ability_def = abilities[ability_name]
+  if ability_def == nil or entity.abilities[ability_name] == nil then return false end
+
+  if entity.abilities[ability_name].locked then return false end
+
+  if ability_def.target then
+    if entity.shoot_target == nil then
+      return false
+    end
+    
+    local target = world.entities[entity.shoot_target]
+    if target == nil or not target.alive then
+      return false
+    end
+
+    local pixelrange = ability_def.range * entity.move_speed * defs.MOVE_SPEED
+    local dist = utils.euclid(target.x,target.y,entity.x,entity.y)
+
+    if dist > pixelrange then
+      return false
+    end
+  end
+
+  return true
 end
 
 function entities.update(world,entity)
@@ -357,6 +461,11 @@ function entities.update(world,entity)
           entity.move_target = nil
         end
       end
+    end
+
+    -- Decide to use abilities
+    if entities.can_use_ability(world,entity,"reflect") then
+      entities.use_ability(world,entity,"reflect")
     end
   end
 end
