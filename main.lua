@@ -698,10 +698,6 @@ function split_spaces(str)
   return str_arr
 end
 
-function euclid(x1,y1,x2,y2)
-  return math.sqrt((x1 - x2) ^2 + (y1 - y2) ^2)
-end
-
 function quadrant(x,y)
   if y >= 0 then
     if x >= 0 then return 1 else return 2 end
@@ -1734,7 +1730,7 @@ function update_player(player,tick)
 
     local target_pos = get_target_pos(player.shoot_target)
     if target_pos ~= nil then
-      local target_dist = euclid(target_pos.x,target_pos.y,player.x,player.y)
+      local target_dist = utils.euclid(target_pos.x,target_pos.y,player.x,player.y)
       if target_dist <= utils.get_pixel_range(player.range) then
         if player.last_shoot == nil or tick - player.last_shoot > shoot_period then
           shoot_bullet(player)
@@ -1810,7 +1806,7 @@ function can_use_ability(username,ability_name)
     end
 
     local pixelrange = ability_def.range * defs.MOVE_SPEED
-    local dist = euclid(target.x,target.y,player.x,player.y)
+    local dist = utils.euclid(target.x,target.y,player.x,player.y)
 
     if dist > pixelrange then
       return false
@@ -2063,7 +2059,7 @@ function world_update()
       if not entity.alive then
         goto continue
       end
-      
+
       local parts = split_delim(ename,".")
 
       if entity.zone ~= nil and not world.zones[entity.zone].discovered then
@@ -2111,7 +2107,7 @@ function world_update()
 
         local target_pos = get_target_pos(entity.shoot_target)
         if target_pos ~= nil then
-          local target_dist = euclid(entity.x,entity.y,target_pos.x,target_pos.y)
+          local target_dist = utils.euclid(entity.x,entity.y,target_pos.x,target_pos.y)
           if target_dist <= utils.get_pixel_range(entity.range) then
             if entity.last_shoot == nil or world.tick - entity.last_shoot > shoot_period then
               entity_shoot_bullet(ename)
@@ -2431,7 +2427,7 @@ function set_shoot_target(username,x,y)
     local distance = nil
     for ename,e in pairs(world.entities) do
       if e.targetable and e.enemy and e.alive then
-        local d = euclid(x,y,e.x,e.y)
+        local d = utils.euclid(x,y,e.x,e.y)
         if closest == nil or d < distance then
           closest = ename
           distance = d
@@ -2567,7 +2563,7 @@ function action()
     local dist = nil
     if player.drops ~= nil then
       for i,drop in pairs(player.drops) do
-        local ddrop = euclid(player.x,player.y,drop.x,drop.y)
+        local ddrop = utils.euclid(player.x,player.y,drop.x,drop.y)
         if ddrop < INTERACT_DIST and (closest == nil or ddrop < dist) then
           closest = "drop " .. tostring(i)
           dist = ddrop

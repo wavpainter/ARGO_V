@@ -134,77 +134,107 @@ function entities.create(type,sprite,visible,zone,x,y,w,h,parent)
     return entity
 end
 
+function entities.summon_get_parent(world,entity)
+  local player_name = entity.parent.name
+  local player = world.players[player_name]
+  if player == nil then
+    return nil
+  end
+
+  return player
+end
+
 function entities.update(world,entity)
   if not entity.alive then return end
 
-  -- Summon
+  local pixelrange = utils.get_pixel_range(entity.range)
+
+  -- Get summon parent
+  local summon_parent = nil
   if entity.summon then
-    local player_name = entity.parent.name
-    local player = world.players[player_name]
-    if player == nil then
+    summon_parent = entities.summon_get_parent(world,entity)
+    if summon_parent == nil then
       entity.alive = false
       return
     end
 
-    local dist_to_player = euclid(entity.x,entity.y,player.x,player.y)
-    if dist_to_player > defs.ENTITY_JUMP_DIST then
-      entity.x = player.x
-      entity.y = player.y
-    elseif dist_to_player > defs.ENTITY_FOLLOW_THRESH then
-      entity.summon_following = true
-    elseif dist_to_player < defs.ENTITY_FOLLOW_DIST then
-      entity.summon_following = false
+    if utils.euclid(entity.x,entity.y,summon_parent.x,summon_parent.y) > defs.ENTITY_JUMP_DIST then
+      log_info("Jump")
+      entity.shoot_target = nil
+      entity.move_target = nil
+      entity.x = summon_parent.x
+      entity.y = summon_parent.y
     end
+  end
 
-    if entity.summon_following then
-      local pos = new_pos(entity.x,entity.y,player.x,player.y,defs.MOVE_SPEED)
-      adjust_pos_for_collisions(pos,entity.w,entity.h)
-
-      entity.x = pos.x
-      entity.y = pos.y
-    end
-
-    entity.shoot_target = player.shoot_target
-  -- Enemy
-  elseif entity.enemy then
-    if not entity.shooting then
-      entity.shooting = true
-    end
+  -- Enemy target player
+  if entity.enemy then
+    entity.shooting = true
 
     -- Get the nearest player
     local nearest_player = nil
     local nearest_dist = nil
     for username,player in pairs(world.players) do
-      local d = euclid(player.x,player.y,entity.x,entity.y)
+      local d = utils.euclid(player.x,player.y,entity.x,entity.y)
       if nearest_player == nil or d < nearest_dist then
         nearest_player = player
         nearest_dist = d
       end
     end
 
-    local pixelrange = utils.get_pixel_range(entity.range)
-
-    -- Walk towards the player
-    if nearest_dist > 0.9 * pixelrange then
-      entity.moving = true
-    elseif nearest_dist < 0.75 * pixelrange then
-      entity.moving = false
-    end
-
-    if entity.moving then
-      entity.move_target = {
-        x = nearest_player.x,
-        y = nearest_player.y
+    if nearest_player ~= nil and nearest_dist < 2 * pixelrange then
+      entity.shoot_target = {
+        type = "player",
+        name = nearest_player.username
       }
     else
-      entity.move_target = nil
+      entity.shoot_target = nil
+    end
+  end
+
+  -- Summon get target from parent
+  if entity.summon then
+    entity.shooting = true
+
+    -- Stop targeting something that's far away
+    local target_dist = utils.get_target_dist(entity.x,entity.y,entity.shoot_target,world)
+    if target_dist == nil or target_dist > 2 * pixelrange then
+      entity.shoot_target = nil
     end
 
-    entity.shoot_target = {
-      type = "player",
-      name = nearest_player.username
-    }
+    if entity.shoot_target == nil then
+      local dist = utils.get_target_dist(entity.x,entity.y,summon_parent.shoot_target,world)
+
+      if dist ~= nil and dist < 2 * pixelrange then
+        entity.shoot_target = {
+          type = summon_parent.shoot_target.type,
+          name = summon_parent.shoot_target.name
+        }
+      end
+    end
   end
+
+  local target_dist = utils.get_target_dist(entity.x,entity.y,entity.shoot_target,world)
+  if target_dist ~= nil then
+    if target_dist > 0.9 * pixelrange then
+      entity.move_target = utils.get_target_pos(entity.shoot_target,world)
+    elseif target_dist < 0.75 * pixelrange then
+      entity.move_target = nil
+    end
+  else
+    if entity.summon then
+      local dist_to_parent = utils.euclid(entity.x,entity.y,summon_parent.x,summon_parent.y)
+      if dist_to_parent > defs.ENTITY_FOLLOW_THRESH then
+        entity.move_target = {
+          x = summon_parent.x,
+          y = summon_parent.y
+        }
+      else
+        entity.move_target = nil
+      end
+    end
+  end
+  
 end
 
 return entities
