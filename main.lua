@@ -841,7 +841,7 @@ function command(input_str)
       else
           logging.log_warning("Could not possess that entity")
       end
-  elseif command == "listent" then
+  elseif command == "list" then
       local ents = ""
       for ename,e in pairs(world.entities) do
       ents = ents .. ename .. " "
@@ -1188,7 +1188,7 @@ function world_draw()
 
   local player = world.entities[curr_entity]
 
-  if world_dbg_showfog and player.player then
+  if world_dbg_showfog then
     -- Create fog mask
     local maskcanvas = love.graphics.newCanvas(love.graphics.getWidth(),love.graphics.getHeight())
     
@@ -1196,7 +1196,11 @@ function world_draw()
     love.graphics.clear(1,1,1,1)
     love.graphics.setBlendMode("multiply","premultiplied")
     love.graphics.setColor(0,0,0,0)
-    for zname,_ in pairs(player.player_discovered_zones) do
+    local zones_to_iterate = world.zones
+    if player.player then
+      zones_to_iterate = player.player_discovered_zones
+    end
+    for zname,_ in pairs(zones_to_iterate) do
       local zone = world.zones[zname]
       for i,region in pairs(zone.regions) do
         local p1 = world_to_screen(region.x1,region.y1)
@@ -1577,8 +1581,6 @@ function world_update()
 
         local active = false
 
-        log_info(parent_name)
-        log_info(parent_ability)
         local parent = world.entities[parent_name]
         if parent ~= nil and parent.active_abilities[parent_ability] ~= nil and parent.active_abilities[parent_ability][id] ~= nil then
           active = true
