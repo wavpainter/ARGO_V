@@ -282,17 +282,11 @@ local curr_entity = nil
 
 ----> Game
 local game_keyhandlers = nil
-local clicking = nil
-local last_move_s = nil
 local game_dbg_pos = nil
 local particles = nil
 
 ----> UI
 local ui = nil
-
-----> LOVE
-local key_release_callbacks = nil
-local mouse_release_callbacks = nil
 
 abilities["stab"].use = function(world,entity)
   -- Get ability target
