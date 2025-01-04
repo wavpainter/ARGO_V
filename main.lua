@@ -3,6 +3,11 @@ local entities = require("entities")
 local utils = require("utils")
 local defs = require("defs")
 local abilities = require("abilities")
+local logging = require("logging")
+
+local log_info = logging.log_info
+local log_warning = logging.log_warning
+local log_error = logging.log_error
 
 --> CONSTANTS
 ----> Util
@@ -16,6 +21,19 @@ local Color = {
   ["darkgrey"] = {0.2,0.2,0.2}
 }
 
+----> State
+local View = {
+  INIT = "init",
+  MENU = "menu",
+  GAME = "game",
+}
+local Debug = {
+  HIDDEN = "hidden",
+  SHOWN = "shown",
+  CAPTURING = "cap"
+}
+
+----> Commands
 local Alphabet = "abcdefghijklmnopqrstuvwxyz"
 local Digits = "0123456789"
 
@@ -36,19 +54,6 @@ for i = 1,#Digits do
   local c = Digits:sub(i,i)
   LegalKeys[c] = c
 end
-
-----> State
-local View = {
-  INIT = "init",
-  MENU = "menu",
-  GAME = "game",
-}
-local Debug = {
-  HIDDEN = "hidden",
-  SHOWN = "shown",
-  CAPTURING = "cap"
-}
-
 ----> Game
 local AbilityKey = { 
   ["1"] = 1, 
@@ -182,56 +187,6 @@ local DEFAULT_PLAYER = {
       locked = true,
       times_used = 0,
       slot = 1,
-    },
-    ["summon2"] = {
-      locked = true,
-      times_used = 0,
-      slot = 2,
-    },
-    ["summon3"] = {
-      locked = true,
-      times_used = 0,
-      slot = 3
-    },
-    ["invis"] = {
-      locked = true,
-      times_used = 0,
-      slot = 4,
-    },
-    ["beam"] = {
-      locked = true,
-      times_used = 0,
-      slot = 5,
-    },
-    ["cantrip"] = {
-      locked = true,
-      times_used = 0,
-      slot = 6,
-    },
-    ["root"] = {
-      locked = true,
-      times_used = 0,
-      slot = 7,
-    },
-    ["rage"] = {
-      locked = true,
-      times_used = 0,
-      slot = 8
-    },
-    ["reflect"] = {
-      locked = true,
-      times_used = 0,
-      slot = 9
-    },
-    ["stun"] = {
-      locked = true,
-      times_used = 0,
-      slot = 10
-    },
-    ["stab"] = {
-      locked = true,
-      times_used = 0,
-      slot = -1
     }
     
   },
@@ -264,10 +219,7 @@ local debug = nil
 local paused = nil
 
 ----> Debug
-local log_ledger = nil
-local n_logs = nil
-local log_file = nil
-local debug_input = nil
+local command_input = nil
 
 ----> Assets
 local loaded_images = nil
@@ -276,13 +228,11 @@ local loaded_images = nil
 
 ----> World
 local world = nil
-local world_dbg_tick = nil
-local world_dbg_showfog = nil
 local curr_entity = nil
+local world_dbg_showfog = nil
 
 ----> Game
 local game_keyhandlers = nil
-local game_dbg_pos = nil
 local particles = nil
 
 ----> UI
@@ -333,6 +283,7 @@ abilities["summon"].use = function(world,entity)
 
   local entity = entities.create_summon("cat","summon",entity.x,entity.y,defs.PLAYER_L,defs.PLAYER_L,summon_name,entity.name,"summon")
 
+  log_info("Adding summon entity: " .. json.encode(entity))
   world.entities[summon_name] = entity
 
   a.update = function()
@@ -807,56 +758,7 @@ function ui_remove_game()
 end
 
 
-----> Log information
-function log_info(message)
-  if message == nil then
-    message = "????"
-  end
-  local new_log = {
-    logtype = "info",
-    datetime = os.date("%Y-%m-%d %H:%M:%S"),
-    message = message
-  }
-  
-  table.insert(log_ledger,new_log)
-  n_logs = n_logs + 1
-  log_file:write(log_text(new_log) .. "\r\n")
-  log_file:flush()
-end
 
-----> Log warning
-function log_warning(message)
-  if message == nil then
-    message = "????"
-  end
-  local new_log = {
-    logtype = "warn",
-    datetime = os.date("%Y-%m-%d %H:%M:%S"),
-    message = message
-  }
-  
-  table.insert(log_ledger,new_log)
-  n_logs = n_logs + 1
-  log_file:write(log_text(new_log) .. "\r\n")
-  log_file:flush()
-end
-
-----> Log error
-function log_error(message)
-  if message == nil then
-    message = "????"
-  end
-  local new_log = {
-    logtype = "err",
-    datetime = os.date("%Y-%m-%d %H:%M:%S"),
-    message = message
-  }
-  
-  table.insert(log_ledger,new_log)
-  n_logs = n_logs + 1
-  log_file:write(log_text(new_log) .. "\r\n")
-  log_file:flush()
-end
 
 --> STATE
 ----> Initialise
@@ -910,11 +812,140 @@ function menu_mousehandler(x,y,button,pressed)
   
 end
 
+----> Debug command
+function command(input_str)
+  logging.log_info("> " .. input_str)
+
+  local split_command = split_spaces(input_str)
+  local command = split_command[1]
+  if command == "save" then
+      local savename = split_command[2]
+      if savename ~= nil then
+      save_world_to(savename)
+      end
+  elseif command == "load" then
+      local savename = split_command[2]
+      if savename ~= nil then
+      load_world_from(savename)
+      end
+  elseif command == "fog" then
+      local show_hide = split_command[2]
+      if show_hide == "show" then
+      world_dbg_showfog = true
+      elseif show_hide == "hide" then
+      world_dbg_showfog = false
+      else
+          logging.log_warning("fog [show | hide]")
+      end
+  elseif command == "possess" then
+      if world.entities[split_command[2]] ~= nil then
+      curr_entity = split_command[2]
+      else
+          logging.log_warning("Could not possess that entity")
+      end
+  elseif command == "listent" then
+      local ents = ""
+      for ename,e in pairs(world.entities) do
+      ents = ents .. ename .. " "
+      end
+      logging.log_info(ents)
+  else
+    logging.log_warning("Unknown command: " .. command)
+  end
+end
+
+----> Draw
+function debug_draw()
+  local w = love.graphics.getWidth()
+  local h = love.graphics.getHeight()
+  local f = love.graphics.getFont()
+  local lh = f:getHeight()
+
+  -- Fade background
+  love.graphics.setColor(0,0,0,0.7)
+  love.graphics.rectangle("fill",0,0,w,h)
+
+  -- Logs
+  local y = h - 3 * lh
+  local n = 20
+  local li = logging.n_logs
+  local l = 1
+
+  while l <= n do
+      if li < 1 then
+      break
+      end
+      
+      local log = logging.log_ledger[li]
+      local logtext = logging.log_text(log)
+      
+      local ltwidth, wrappedtext = f:getWrap(logtext,w - f:getWidth("\t"))
+      local n_lines = 0
+      for _,line in ipairs(wrappedtext) do
+      n_lines = n_lines + 1
+      end
+      
+      for i = n_lines,1,-1 do
+      love.graphics.setColor(1,1,1,1)
+      if i == 1 then
+          love.graphics.printf(wrappedtext[i],0,y,w)
+          y = y - lh
+          l = l + 1
+      else
+          love.graphics.printf("\t" .. wrappedtext[i],0,y,w)
+          y = y - lh
+          l = l + 1
+      end
+      end
+      
+      li = li - 1
+  end
+
+  -- Input
+  love.graphics.setColor(1,1,1,0.2)
+  love.graphics.rectangle("fill",0.5 * lh,h - 1.5 * lh,w - lh,lh)
+
+  love.graphics.setColor(1,1,1,1)
+  love.graphics.printf(command_input,0.5 * lh, h - 1.5 * lh,w - lh)
+end
+
+
+----> Capturing debug handler
+function debug_keyhandler(key,pressed)
+  if pressed then
+      if key == 'return' then
+          command(command_input)
+      command_input = ""
+      elseif key == 'backspace' or key == 'delete' then
+        command_input = string.sub(command_input,1,string.len(command_input)-1)
+      else
+      local keytest = key
+      if love.keyboard.isDown("lshift") or love.keyboard.isDown("rshift") then
+          keytest = "shift " .. key
+      end
+      local char = LegalKeys[keytest]
+      if char then
+        command_input = command_input .. char
+      end
+  end
+end
+
+return true
+end
+
+----> Capturing debug mous handler
+function debug_mousehandler(x,y,button,pressed)
+  return true
+end
+
+function debug_init()
+  command_input = ""
+end
+
 --> WORLD
 ----> Initialise
 function world_init()
   world = nil
-  world_dbg_tick = nil
   world_dbg_showfog = true
 end
 
@@ -1046,6 +1077,41 @@ function get_target_pos(target_name)
   }
 end
 
+function draw_entity(e)
+  if e.visible and e.alive then
+    -- Entity image
+    local pos = world_to_screen(e.x,e.y)
+    local img = get_image(e.sprite)
+    local xscale = e.w / img.w
+    local yscale = e.h / img.h
+    love.graphics.setColor(1,1,1)
+    love.graphics.draw(img.img,pos.x-e.w/2,pos.y-e.h/2,0,xscale,yscale)
+
+    if e.targetable and e.enemy then
+      love.graphics.setColor(1,triangle(0.5),0)
+      love.graphics.rectangle("line",pos.x-e.w/2-5,pos.y-e.h/2-5,e.w+10,e.h+10)
+    end
+
+    -- Entity HP bar
+    local hpw = 80
+    local hph = 10
+    love.graphics.setColor(0,0,0)
+    love.graphics.rectangle("fill",pos.x - hpw/2,pos.y + e.h/2 + hph,hpw,hph)
+    local hpv = (e.hp / e.max_hp) * hpw
+    love.graphics.setColor(0,1,0)
+    love.graphics.rectangle("fill",pos.x - hpw/2,pos.y + e.h/2 + hph,hpv,hph)
+
+    -- Draw active abilities
+    for aname,aabils in pairs(e.active_abilities) do
+      for _,aabil in pairs(aabils) do
+        aabil.draw()
+      end
+    end
+  end
+
+  
+end
+
 ----> Draw
 function world_draw()
   local player = world.entities[curr_entity]
@@ -1059,78 +1125,53 @@ function world_draw()
 
   world_draw_objects("collide")
 
-  local target_draw_pos = nil
+  local player_entity = nil
 
   for ename,e in pairs(world.entities) do
-    if e.visible and e.alive then
-      -- Entity image
-      local pos = world_to_screen(e.x,e.y)
-      local img = get_image(e.sprite)
-      local xscale = e.w / img.w
-      local yscale = e.h / img.h
-      love.graphics.setColor(1,1,1)
-      love.graphics.draw(img.img,pos.x-e.w/2,pos.y-e.h/2,0,xscale,yscale)
-
-      if e.targetable and e.enemy then
-        love.graphics.setColor(1,triangle(0.5),0)
-        love.graphics.rectangle("line",pos.x-e.w/2-5,pos.y-e.h/2-5,e.w+10,e.h+10)
-      end
-
-      -- Entity HP bar
-      local hpw = 80
-      local hph = 10
-      love.graphics.setColor(0,0,0)
-      love.graphics.rectangle("fill",pos.x - hpw/2,pos.y + e.h/2 + hph,hpw,hph)
-      local hpv = (e.hp / e.max_hp) * hpw
-      love.graphics.setColor(0,1,0)
-      love.graphics.rectangle("fill",pos.x - hpw/2,pos.y + e.h/2 + hph,hpv,hph)
-
-      -- Draw active abilities
-      for aname,aabils in pairs(e.active_abilities) do
-        for _,aabil in pairs(aabils) do
-          aabil.draw()
-        end
-      end
-    end
-
-    -- Draw what player is seeing
-    if e.name == curr_entity then
-      if e.move_target ~= nil then
-        local tpos = world_to_screen(e.move_target.x,e.move_target.y)
-        love.graphics.setColor(0,1,0)
-        love.graphics.circle("fill",tpos.x,tpos.y,PLAYER_L/8)
-      end
-
-      for _,loot in pairs(e.player_loot) do
-        local parts = split_spaces(loot.name)
-        local pos = world_to_screen(loot.x,loot.y)
-        if parts[1] == "ability" then
-          local img = get_image(parts[2])
-          local xscale = DROP_L / img.w
-          local yscale = DROP_L / img.h
-          love.graphics.setColor(1,1,1)
-          love.graphics.draw(img.img,pos.x-DROP_L/2,pos.y- DROP_L/2,0,xscale,yscale)
-  
-          love.graphics.setColor(0.615,0,1)
-          love.graphics.rectangle("line",pos.x-DROP_L/2,pos.y - DROP_L/2,DROP_L,DROP_L)
-        end
-      end
-
-      if e.shoot_target ~= nil then
-        local et = world.entities[e.shoot_target]
-        if et ~= nil and et.alive then
-          target_draw_pos = world_to_screen(et.x,et.y)
-        end
-      end
+    if ename == curr_entity then
+      player_entity = e
+    else
+      draw_entity(e)
     end
   end
 
-  if target_draw_pos then
-    local img = get_image("target")
-    local xscale = PLAYER_L / img.w / 2
-    local yscale = PLAYER_L / img.h / 2
-    love.graphics.setColor(1,1,1)
-    love.graphics.draw(img.img,target_draw_pos.x - PLAYER_L / 4, target_draw_pos.y - PLAYER_L / 4,0,xscale,yscale)
+
+  -- Draw what player is seeing
+  if player_entity ~= nil then
+    draw_entity(player_entity)
+
+    if player_entity.move_target ~= nil then
+      local tpos = world_to_screen(player_entity.move_target.x,player_entity.move_target.y)
+      love.graphics.setColor(0,1,0)
+      love.graphics.circle("fill",tpos.x,tpos.y,PLAYER_L/8)
+    end
+
+    for _,loot in pairs(player_entity.player_loot) do
+      local parts = split_spaces(loot.name)
+      local pos = world_to_screen(loot.x,loot.y)
+      if parts[1] == "ability" then
+        local img = get_image(parts[2])
+        local xscale = DROP_L / img.w
+        local yscale = DROP_L / img.h
+        love.graphics.setColor(1,1,1)
+        love.graphics.draw(img.img,pos.x-DROP_L/2,pos.y- DROP_L/2,0,xscale,yscale)
+
+        love.graphics.setColor(0.615,0,1)
+        love.graphics.rectangle("line",pos.x-DROP_L/2,pos.y - DROP_L/2,DROP_L,DROP_L)
+      end
+    end
+
+    if player_entity.shoot_target ~= nil then
+      local et = world.entities[player_entity.shoot_target]
+      if et ~= nil and et.alive then
+        local tp = world_to_screen(et.x,et.y)
+        local img = get_image("target")
+        local xscale = PLAYER_L / img.w / 2
+        local yscale = PLAYER_L / img.h / 2
+        love.graphics.setColor(1,1,1)
+        love.graphics.draw(img.img,tp.x - PLAYER_L / 4, tp.y - PLAYER_L / 4,0,xscale,yscale)
+      end
+    end
   end
 
   local bullets = world.bullets
@@ -1518,7 +1559,7 @@ end
 function unlock_random(entity,exclude,reset_charge)
   if reset_charge == nil then reset_charge = true end
 
-  if entity == nil then
+  if entity == nil or entity.abilities == nil then
     return
   end
   
@@ -1627,10 +1668,14 @@ function world_update()
       if entity.summon then
         local parent_name = entity.parent
         local parent_ability = entity.parent_ability
+        local name_parts = split_delim(entity.name,".")
+        local id = name_parts[2]
 
         local active = false
 
-        local parent = world.players[parent_name]
+        log_info(parent_name)
+        log_info(parent_ability)
+        local parent = world.entities[parent_name]
         if parent ~= nil and parent.active_abilities[parent_ability] ~= nil and parent.active_abilities[parent_ability][id] ~= nil then
           active = true
         end
@@ -2559,25 +2604,31 @@ function ui_mousehandler_abilities_book(x,y,button,pressed)
       
       local prev_ability = ability_map[i]
       local prev_ability_def = player_abilities[prev_ability]
-      local prev_slot = prev_ability_def.slot
-
-      if selected_ability_def.slot ~= -1 then
-        -- Swap
-        prev_ability_def.slot = selected_ability_def.slot
-        selected_ability_def.slot = prev_slot
-
-        ability_map[prev_ability_def.slot] = prev_ability
-        ability_map[selected_ability_def.slot] = uidef.selected
+      if prev_ability_def == nil then
+        -- Less than 10 abilities (edge case)
+        ability_map[selected_ability_def.slot] = nil
+        selected_ability_def.slot = i
+        ability_map[i] = uidef.selected
       else
-        -- Replace
-        prev_ability_def.slot = -1
-        prev_ability_def.locked = true
-        selected_ability_def.slot = prev_slot
-        selected_ability_def.locked = true
+        local prev_slot = prev_ability_def.slot
 
-        ability_map[selected_ability_def.slot] = uidef.selected
+        if selected_ability_def.slot ~= -1 then
+          -- Swap
+          prev_ability_def.slot = selected_ability_def.slot
+          selected_ability_def.slot = prev_slot
+
+          ability_map[prev_ability_def.slot] = prev_ability
+          ability_map[selected_ability_def.slot] = uidef.selected
+        else
+          -- Replace
+          prev_ability_def.slot = -1
+          prev_ability_def.locked = true
+          selected_ability_def.slot = prev_slot
+          selected_ability_def.locked = true
+
+          ability_map[selected_ability_def.slot] = uidef.selected
+        end
       end
-
     else
       uidef.selected = ability_map[i]
       if button == 2 then
@@ -2657,163 +2708,12 @@ function ui_keyhandler(key,pressed)
   end
 end
 
---> DEBUG
-----> Initialise
-function debug_init()
-  log_ledger = {}
-  n_logs = 0
-  love.filesystem.createDirectory("logs")
-  local log_filename = "logs/" .. os.date("%Y%m%d%H%M%S") .. ".txt"
-  log_file = love.filesystem.newFile(log_filename)
-  log_file:open("w")
-  debug_input = ""
-end
-
-----> Log to text
-function log_text(log)
-  return log.logtype .. " - " .. log.datetime .. ": " .. log.message
-end
-
-----> Draw
-function debug_draw()
-  local w = love.graphics.getWidth()
-  local h = love.graphics.getHeight()
-  local f = love.graphics.getFont()
-  local lh = f:getHeight()
-  
-  -- Fade background
-  love.graphics.setColor(0,0,0,0.7)
-  love.graphics.rectangle("fill",0,0,w,h)
-  
-  -- Player position
-  love.graphics.setColor(1,1,1,1)
-  if game_dbg_pos ~= nil then
-    love.graphics.printf("Player position: " .. math.floor(game_dbg_pos.x * 10) / 10 .. " " .. math.floor(game_dbg_pos.y * 10) / 10,0,0,w)
-  end
-  
-  -- Tick
-  if world_dbg_tick ~= nil then
-    love.graphics.printf("World tick: " .. tostring(world_dbg_tick),0,lh,w)
-  end
-  
-  -- Logs
-  local y = h - 3 * lh
-  local n = 20
-  local li = n_logs
-  local l = 1
-  
-  while l <= n do
-    if li < 1 then
-      break
-    end
-    
-    local log = log_ledger[li]
-    local logtext = log_text(log)
-    
-    local ltwidth, wrappedtext = f:getWrap(logtext,w - f:getWidth("\t"))
-    local n_lines = 0
-    for _,line in ipairs(wrappedtext) do
-      n_lines = n_lines + 1
-    end
-    
-    for i = n_lines,1,-1 do
-      love.graphics.setColor(1,1,1,1)
-      if i == 1 then
-        love.graphics.printf(wrappedtext[i],0,y,w)
-        y = y - lh
-        l = l + 1
-      else
-        love.graphics.printf("\t" .. wrappedtext[i],0,y,w)
-        y = y - lh
-        l = l + 1
-      end
-    end
-    
-    li = li - 1
-  end
-
-  -- Input
-  love.graphics.setColor(1,1,1,0.2)
-  love.graphics.rectangle("fill",0.5 * lh,h - 1.5 * lh,w - lh,lh)
-
-  love.graphics.setColor(1,1,1,1)
-  love.graphics.printf(debug_input,0.5 * lh, h - 1.5 * lh,w - lh)
-end
-
-
-----> Debug command
-function debug_command(input_str)
-  log_info("> " .. input_str)
-
-  local split_command = split_spaces(input_str)
-  local command = split_command[1]
-  if command == "save" then
-    local savename = split_command[2]
-    if savename ~= nil then
-      save_world_to(savename)
-    end
-  elseif command == "load" then
-    local savename = split_command[2]
-    if savename ~= nil then
-      load_world_from(savename)
-    end
-  elseif command == "fog" then
-    local show_hide = split_command[2]
-    if show_hide == "show" then
-      world_dbg_showfog = true
-    elseif show_hide == "hide" then
-      world_dbg_showfog = false
-    else
-      log_warning("fog [show | hide]")
-    end
-  elseif command == "possess" then
-    if world.entities[split_command[2]] ~= nil then
-      curr_entity = split_command[2]
-    else
-      log_warning("Could not possess that entity")
-    end
-  elseif command == "listent" then
-    local ents = ""
-    for ename,e in pairs(world.entities) do
-      ents = ents .. ename .. " "
-    end
-    log_info(ents)
-  else
-    log_warning("Unknown command: " .. command)
-  end
-end
-
-----> Capturing debug handler
-function debug_keyhandler(key,pressed)
-  if pressed then
-    if key == 'return' then
-      debug_command(debug_input)
-      debug_input = ""
-    elseif key == 'backspace' or key == 'delete' then
-      debug_input = string.sub(debug_input,1,string.len(debug_input)-1)
-    else
-      local keytest = key
-      if love.keyboard.isDown("lshift") or love.keyboard.isDown("rshift") then
-        keytest = "shift " .. key
-      end
-      local char = LegalKeys[keytest]
-      if char then
-        debug_input = debug_input .. char
-      end
-    end
-  end
-
-  return true
-end
-
-----> Capturing debug mous handler
-function debug_mousehandler(x,y,button,pressed)
-  return true
-end
-
 --> LOVE
 ----> Load
 function love.load()
+  logging.init()
+  log_info("|    ARGO V    |")
+
   state_init()
   debug_init()
   assets_init()
@@ -2823,14 +2723,10 @@ function love.load()
   
   register_key_handlers()
   
-  key_release_callbacks = {}
-  mouse_release_callbacks = {}
-  
   debug = Debug.HIDDEN
   paused = false
   view = View.INIT
   
-  log_info("|    ARGO V    |")
 end
 
 ----> Draw

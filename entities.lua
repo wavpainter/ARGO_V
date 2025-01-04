@@ -1,6 +1,12 @@
 local defs = require("defs")
 local utils = require("utils")
 local abilities = require("abilities")
+local json = require("json")
+local logging = require("logging")
+
+local log_info = logging.log_info
+local log_warning = logging.log_warning
+local log_error = logging.log_error
 
 local Entities = {
     ["dummy"] = {
@@ -297,7 +303,7 @@ function entities.update(world,entity)
       local nearest_entity = nil
       local nearest_dist = nil
       for ename,e in pairs(world.entities) do
-        if e.enemy ~= entity.enemy then
+        if e.alive and (e.enemy ~= entity.enemy) then
           local d = utils.euclid(e.x,e.y,entity.x,entity.y)
           if nearest_entity == nil or d < nearest_dist then
             nearest_entity = e
@@ -353,10 +359,6 @@ function entities.update(world,entity)
       end
     end
   end
-
-
-  
-  
 end
 
 return entities
