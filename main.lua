@@ -279,9 +279,8 @@ abilities["summon"].use = function(world,entity)
 
   local summon_name = "summon." .. a.id
 
-  local entity = entities.create_summon("cat","summon",entity.x,entity.y,defs.PLAYER_L,defs.PLAYER_L,summon_name,entity.name,"summon")
+  local entity = entities.create_summon("cat","summon",entity.x,entity.y,defs.PLAYER_L,defs.PLAYER_L,summon_name,entity.name,"summon",entity.enemy)
 
-  log_info("Adding summon entity: " .. json.encode(entity))
   world.entities[summon_name] = entity
 
   a.update = function()

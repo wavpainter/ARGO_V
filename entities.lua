@@ -31,7 +31,7 @@ local Entities = {
       max_hp = 200,
       move_speed = 0.75,
       abilities = {
-        ["reflect"] = {
+        ["summon"] = {
           locked = true,
           times_used = 0,
           slot = 1,
@@ -100,12 +100,13 @@ function entities.create_player(sprite,x,y,w,h,abils,name)
   return entity
 end
 
-function entities.create_summon(type,sprite,x,y,w,h,name,parent,parent_ability)
+function entities.create_summon(type,sprite,x,y,w,h,name,parent,parent_ability,enemy)
   local entity = entities.create(type,sprite,true,nil,x,y,w,h,Entities[type].abilities,name)
   entity.parent = parent
   entity.parent_ability = parent_ability
   entity.summon = true
   entity.ephemeral = true
+  entity.enemy = enemy
   return entity
 end
 
@@ -466,6 +467,10 @@ function entities.update(world,entity)
     -- Decide to use abilities
     if entities.can_use_ability(world,entity,"reflect") then
       entities.use_ability(world,entity,"reflect")
+    end
+
+    if entities.can_use_ability(world,entity,"summon") then
+      entities.use_ability(world,entity,"summon")
     end
   end
 end
