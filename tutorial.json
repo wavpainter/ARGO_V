@@ -30,83 +30,83 @@
     "entities": {
         "dummy1": {
             "sprite": "dummy",
-            "isa": "dummy",
+            "type": "dummy",
             "zone": "B",
             "x": 2800,
             "y": 0,
             "w": 80,
             "h": 80,
-            "visible": "true"
+            "visible": true
         },
         "botC1": {
             "sprite": "smallrobot",
-            "isa": "meleebot",
+            "type": "meleebot",
             "zone": "C",
             "x": 5200,
             "y": -400,
             "w": 80,
             "h": 80,
-            "visible": "true"
+            "visible": true
         },
         "botC2": {
             "sprite": "smallrobot",
-            "isa": "meleebot",
+            "type": "meleebot",
             "zone": "C",
             "x": 5200,
             "y": 0,
             "w": 80,
             "h": 80,
-            "visible": "true"
+            "visible": true
         },
         "botC3": {
             "sprite": "smallrobot",
-            "isa": "meleebot",
+            "type": "meleebot",
             "zone": "C",
             "x": 5200,
             "y": 400,
             "w": 80,
             "h": 80,
-            "visible": "true"
+            "visible": true
         },
         "botD1": {
             "sprite": "smallrobot",
-            "isa": "meleebot",
+            "type": "meleebot",
             "zone": "D",
             "x": 7200,
             "y": -400,
             "w": 80,
             "h": 80,
-            "visible": "true"
+            "visible": true
         },
         "botD2": {
             "sprite": "bigbot",
-            "isa": "bigbot",
+            "type": "bigbot",
             "zone": "D",
             "x": 7200,
             "y": 0,
             "w": 100,
             "h": 100,
-            "visible": "true"
+            "visible": true
         },
         "botD3": {
             "sprite": "smallrobot",
-            "isa": "meleebot",
+            "type": "meleebot",
             "zone": "D",
             "x": 7200,
             "y": 400,
             "w": 80,
             "h": 80,
-            "visible": "true"
+            "visible": true
         },
         "botD4": {
             "sprite": "smallrobot",
-            "isa": "meleebot",
+            "type": "meleebot",
             "zone": "D",
             "x": 6800,
             "y": 0,
             "w": 80,
             "h": 80,
-            "visible": "true"
+            "visible": true
         }
     },
     "zones": {
