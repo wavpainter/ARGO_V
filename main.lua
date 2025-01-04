@@ -2,6 +2,7 @@ local json = require("json")
 local entities = require("entities")
 local utils = require("utils")
 local defs = require("defs")
+local abilities = require("abilities")
 
 --> CONSTANTS
 ----> Util
@@ -67,11 +68,9 @@ local MOVE_DELAY_S = 0.15
 local PLAYER_L = 75
 local DROP_L = 40
 
-local PLAYER_HP = 1000
 local BULLET_SPEED = 1500
 local BULLET_RADIUS = 10
 local INTERACT_DIST = 100
-local TPS = 60
 local CHARGE_TO_UNLOCK = 8
 local MAX_UNLOCKED = 3
 local OFFSET_X = 0
@@ -106,150 +105,7 @@ local Images = {
   ["smallrobot"] = "smallrobot.png",
   ["bigbot"] = "bigbot.png"
 }
-local Abilities = {
-  ["invis"] = {
-    index = 1,
-    name = "Invisibility",
-    description = "Turn invisible",
-    interrupt = false,
-    target = false,
-    channel = false,
-    stationary = false,
-    use = function(world,player) return nil end
-  },
-  ["beam"] = {
-    index = 2,
-    name = "Beam",
-    description = "Shoot a light beam that cuts through enemies.",
-    interrupt = false,
-    target = true,
-    range = 10,
-    channel = true,
-    stationary = true,
-    frequency = 10,
-    damage = 10,
-    use = function(world,player) return true end
-  },
-  ["cantrip"] = {
-    index = 3,
-    name = "Think",
-    description = "Unlock another random ability",
-    interrupt = false,
-    target = false,
-    channel = false,
-    stationary = false,
-    use = function(world,player) return nil end
-  },
-  ["root"] = {
-    index = 4,
-    name = "Root",
-    description = "",
-    interrupt = true,
-    target = true,
-    range = 10,
-    channel = false,
-    stationary = false,
-    use = function(world,player) return nil end
-  },
-  ["summon"] = {
-    index = 5,
-    name = "Summon",
-    description = "",
-    interrupt = false,
-    target = false,
-    channel = false,
-    stationary = false,
-    duration = 20,
-    shoot_speed = 2,
-    range = 1,
-    damage = 10,
-    use = function(world,player) return nil end
-  },
-  ["rage"] = {
-    index = 7,
-    name = "Rage",
-    description = "",
-    interrupt = false,
-    target = false,
-    channel = false,
-    stationary = false,
-    duration = 5,
-    use = function(world,player) return nil end
-  },
-  ["reflect"] = {
-    index = 8,
-    name = "Reflective barrier",
-    description = "",
-    interrupt = false,
-    target = false,
-    channel = false,
-    stationary = false,
-    duration = 10,
-    use = function(world,player) return nil end
-  },
-  ["stun"] = {
-    index = 9,
-    name = "Stun",
-    description = "",
-    interrupt = true,
-    target = true,
-    range = 10,
-    channel = false,
-    stationary = false,
-    use = function(world,player) return nil end
-  },
-  ["pull"] = {
-    index = 10,
-    name = "Pull",
-    description = "",
-    interrupt = true,
-    target = true,
-    range = 10,
-    channel = false,
-    stationary = true,
-    use = function(world,player) return nil end
-  },
-  ["stab"] = {
-    index = 11,
-    name = "Stab",
-    description = "",
-    interrupt = false,
-    target = true,
-    range = 0.1,
-    channel = false,
-    stationary = false,
-    damage = 1000,
-    use = function(world,player) return nil end
-  },
-  ["summon2"] = {
-    index = 12,
-    name = "Summon2",
-    description = "",
-    interrupt = false,
-    target = false,
-    channel = false,
-    stationary = false,
-    duration = 20,
-    shoot_speed = 2,
-    range = 1,
-    damage = 10,
-    use = function(world,player) return nil end
-  },
-  ["summon3"] = {
-    index = 14,
-    name = "Summon 3",
-    description = "",
-    interrupt = false,
-    target = false,
-    channel = false,
-    stationary = false,
-    duration = 20,
-    shoot_speed = 2,
-    range = 1,
-    damage = 10,
-    use = function(world,player) return nil end
-  }
-}
+
 local Objects = {
   ["lectern"] = {
     interactable = "true"
@@ -372,15 +228,15 @@ local DEFAULT_PLAYER = {
       times_used = 0,
       slot = 10
     },
+    ["stab"] = {
+      locked = true,
+      times_used = 0,
+      slot = -1
+    }
     
   },
-  avatar = "jason",
-  shoot_speed = 4,
-  range = 1,
-  damage = 10,
-  hp = PLAYER_HP
+  avatar = "jason"
 }
-
 
 ----> UI
 local Anchor = {
@@ -422,6 +278,7 @@ local loaded_images = nil
 local world = nil
 local world_dbg_tick = nil
 local world_dbg_showfog = nil
+local curr_entity = nil
 
 ----> Game
 local game_keyhandlers = nil
@@ -437,9 +294,96 @@ local ui = nil
 local key_release_callbacks = nil
 local mouse_release_callbacks = nil
 
-Abilities["beam"].use = function(world,player)
+abilities["stab"].use = function(world,entity)
   -- Get ability target
-  local target = world.entities[player.shoot_target.name]
+  local target = world.entities[entity.shoot_target.name]
+  if target == nil then return nil end
+
+  -- Deal damage
+  deal_damage(entity.shoot_target.name,abilities.get_ability_def("stab").damage)
+end
+
+abilities["rage"].use = function(world,entity)
+  local a = {}
+  a.t0 = world.tick
+  a.tf = world.tick + abilities["rage"].duration * defs.TPS
+  a.id = id()
+
+  a.update = function()
+    if world.tick > a.tf then
+      return false
+    else
+      return true
+    end
+  end
+
+  a.draw = function()
+
+  end
+
+  return a
+end
+
+abilities["cantrip"].use = function(world,entity)
+  unlock_random(entity,"cantrip",false)
+end
+
+abilities["summon"].use = function(world,entity)
+  local a = {}
+  a.t0 = world.tick
+  a.tf = world.tick + abilities["summon"].duration * defs.TPS
+  a.id = id()
+  a.following = false
+
+  local summon_name = "summon." .. a.id
+
+  local entity = entities.create_summon("cat","summon",entity.x,entity.y,defs.PLAYER_L,defs.PLAYER_L,summon_name,entity.name,"summon")
+
+  world.entities[summon_name] = entity
+
+  a.update = function()
+    if world.tick > a.tf then
+      return false
+    else
+      return true
+    end
+  end
+
+  a.draw = function()
+
+  end
+
+  return a
+end
+
+abilities["reflect"].use = function(world,entity)
+  local a = {}
+  a.t0 = world.tick
+  a.tf = world.tick + abilities["rage"].duration * defs.TPS
+  a.id = id()
+  a.rad = math.sqrt(2*(defs.PLAYER_L/2)^2)
+
+  a.update = function()
+    if world.tick > a.tf then
+    return false
+    else
+    return true
+    end
+  end
+
+  a.draw = function()
+    local pos = world_to_screen(entity.x,entity.y)
+
+    love.graphics.setColor(1,0.2,0,0.2)
+    love.graphics.circle("fill",pos.x,pos.y,a.rad)
+  end
+
+  return a
+end
+
+abilities["beam"].use = function(world,entity)
+  -- Get ability target
+  local target = world.entities[entity.shoot_target.name]
   if target == nil then return nil end
 
   local a = {}
@@ -455,19 +399,19 @@ Abilities["beam"].use = function(world,player)
   a.id = id()
 
   a.get_endpoint = function()
-    local dx = player.x - a.target.x
-    local dy = player.y - a.target.y
+    local dx = entity.x - a.target.x
+    local dy = entity.y - a.target.y
 
     if dx == 0 then
       if dy < 0 then 
         return {
-          x = player.x,
-          y = player.y - BIGNUM
+          x = entity.x,
+          y = entity.y - BIGNUM
         }
       else
         return { 
-          x = player.x,
-          y = player.y - BIGNUM
+          x = entity.x,
+          y = entity.y - BIGNUM
         }
       end
     else
@@ -475,13 +419,13 @@ Abilities["beam"].use = function(world,player)
 
       if dx < 0 then
         return { 
-          x = player.x + BIGNUM,
-          y = player.y + BIGNUM * m
+          x = entity.x + BIGNUM,
+          y = entity.y + BIGNUM * m
         }
       else
         return {
-          x = player.x - BIGNUM,
-          y = player.y - BIGNUM * m
+          x = entity.x - BIGNUM,
+          y = entity.y - BIGNUM * m
         }
       end
     end
@@ -491,15 +435,15 @@ Abilities["beam"].use = function(world,player)
   a.update = function()
 
     -- Deal damage
-    if a.last_dmg == nil or world.tick > (a.last_dmg + math.floor(TPS / Abilities["beam"].frequency)) then
+    if a.last_dmg == nil or world.tick > (a.last_dmg + math.floor(defs.TPS / abilities["beam"].frequency)) then
       a.last_dmg = world.tick
 
       local endpoint = a.get_endpoint()
 
       -- Find the first object that the beam collides with
       for ename,e in pairs(world.entities) do
-        if e.enemy and e.alive and line_intersects_rect(player.x,player.y,endpoint.x,endpoint.y,e.x-e.w/2,e.y-e.h/2,e.w,e.h) then
-          deal_entity_damage(ename,Abilities["beam"].damage)
+        if e.enemy and e.alive and line_intersects_rect(entity.x,entity.y,endpoint.x,endpoint.y,e.x-e.w/2,e.y-e.h/2,e.w,e.h) then
+          deal_damage(ename,abilities["beam"].damage)
         end
       end
     end
@@ -511,99 +455,16 @@ Abilities["beam"].use = function(world,player)
   a.draw = function()
     local endpoint = a.get_endpoint()
     local targetpos = world_to_screen(endpoint.x,endpoint.y)
-    local playerpos = world_to_screen(player.x,player.y)
+    local entitypos = world_to_screen(entity.x,entity.y)
 
     love.graphics.setColor(triangle(10,a.t0) * 0.5 + 0.5,triangle(10,a.t0) * 0.5 + 0.5,1)
-    love.graphics.line(playerpos.x,playerpos.y,targetpos.x,targetpos.y)
+    love.graphics.line(entitypos.x,entitypos.y,targetpos.x,targetpos.y)
   end
 
   return a
 end
 
-Abilities["stab"].use = function(world,player)
-  -- Get ability target
-  local target = world.entities[player.shoot_target.name]
-  if target == nil then return nil end
 
-  -- Deal damage
-  deal_entity_damage(player.shoot_target.name,Abilities["stab"].damage)
-end
-
-Abilities["rage"].use = function(world,player)
-  local a = {}
-  a.t0 = world.tick
-  a.tf = world.tick + Abilities["rage"].duration * TPS
-  a.id = id()
-
-  a.update = function()
-    if world.tick > a.tf then
-      return false
-    else
-      return true
-    end
-  end
-
-  a.draw = function()
-
-  end
-
-  return a
-end
-
-Abilities["cantrip"].use = function(world,player)
-  unlock_random(player.username,"cantrip",false)
-end
-
-Abilities["summon"].use = function(world,player)
-  local a = {}
-  a.t0 = world.tick
-  a.tf = world.tick + Abilities["summon"].duration * TPS
-  a.id = id()
-  a.following = false
-
-  local entity = entities.create("cat","summon",true,nil,player.x,player.y,PLAYER_L,PLAYER_L,{type = "player", name = player.username})
-
-  world.entities["summon." .. player.username .. "." .. a.id] = entity
-
-  a.update = function()
-    if world.tick > a.tf then
-      return false
-    else
-      return true
-    end
-  end
-
-  a.draw = function()
-
-  end
-
-  return a
-end
-
-Abilities["reflect"].use = function(world,player)
-  local a = {}
-  a.t0 = world.tick
-  a.tf = world.tick + Abilities["rage"].duration * TPS
-  a.id = id()
-  a.rad = math.sqrt(2*(PLAYER_L/2)^2)
-
-  a.update = function()
-    if world.tick > a.tf then
-      return false
-    else
-      return true
-    end
-  end
-
-  a.draw = function()
-    local pos = world_to_screen(player.x,player.y)
-
-    love.graphics.setColor(1,0.2,0,0.2)
-    love.graphics.circle("fill",pos.x,pos.y,a.rad)
-  end
-
-  return a
-end
 
 --> UTILS
 ----> Get screen world bounds
@@ -657,26 +518,6 @@ function square(hz,phase)
     return 1
   else
     return 0
-  end
-end
-
-function new_pos(x1,y1,x2,y2,speed)
-  local target_dist = math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2)
-  local t_remain = target_dist / speed
-  local dt = love.timer.getDelta()
-  if t_remain <= dt then
-    return {
-      arrived = true,
-      x = x2,
-      y = y2,
-    }
-  else
-    local scale = dt / t_remain
-    return {
-      arrived = false,
-      x = x1 + (x2 - x1) * scale,
-      y = y1 + (y2 - y1) * scale
-    }
   end
 end
 
@@ -1186,13 +1027,6 @@ function draw_background(bg,x,y)
   end
 end
 
-----> Get entity
-function get_entity(name)
-  if world ~= nil and world.entities[name] ~= nil then
-    return world.entities[name]
-  end
-end
-
 function world_draw_objects(layername)
   if world ~= nil and world.objects[layername] ~= nil then
     local objs = world.objects[layername]
@@ -1209,33 +1043,18 @@ function world_draw_objects(layername)
 end
 
 ----> Get shoot target position
-function get_target_pos(target)
-  if target.type == "entity" then
-    local world_entities = world.entities
-    local entity = world_entities[target.name]
-    if entity == nil or not entity.alive then return nil end
-    return {
-      x = entity.x,
-      y = entity.y
-    }
-  elseif target.type == "player" then
-    local player = world.players[target.name]
-    if player == nil then return nil end
-    return {
-      x = player.x,
-      y = player.y
-    }
-  elseif target.type == "pos" then
-    return {
-      x = target.x,
-      y = target.y
-    }
-  else return nil end
+function get_target_pos(target_name)
+  local entity = world.entities[target_name]
+  if entity == nil or not entity.alive then return nil end
+  return {
+    x = entity.x,
+    y = entity.y
+  }
 end
 
 ----> Draw
 function world_draw()
-  local player = world.players[DEFAULT_USERNAME]
+  local player = world.entities[curr_entity]
   local bg = world.background
   
   if bg ~= nil then
@@ -1246,8 +1065,9 @@ function world_draw()
 
   world_draw_objects("collide")
 
-  local world_entities = world.entities
-  for ename,e in pairs(world_entities) do
+  local target_draw_pos = nil
+
+  for ename,e in pairs(world.entities) do
     if e.visible and e.alive then
       -- Entity image
       local pos = world_to_screen(e.x,e.y)
@@ -1271,84 +1091,59 @@ function world_draw()
       love.graphics.setColor(0,1,0)
       love.graphics.rectangle("fill",pos.x - hpw/2,pos.y + e.h/2 + hph,hpv,hph)
 
+      -- Draw active abilities
+      for aname,aabils in pairs(e.active_abilities) do
+        for _,aabil in pairs(aabils) do
+          aabil.draw()
+        end
+      end
+    end
+
+    -- Draw what player is seeing
+    if e.name == curr_entity then
+      if e.move_target ~= nil then
+        local tpos = world_to_screen(e.move_target.x,e.move_target.y)
+        love.graphics.setColor(0,1,0)
+        love.graphics.circle("fill",tpos.x,tpos.y,PLAYER_L/8)
+      end
+
+      for _,loot in pairs(e.player_loot) do
+        local parts = split_spaces(loot.name)
+        local pos = world_to_screen(loot.x,loot.y)
+        if parts[1] == "ability" then
+          local img = get_image(parts[2])
+          local xscale = DROP_L / img.w
+          local yscale = DROP_L / img.h
+          love.graphics.setColor(1,1,1)
+          love.graphics.draw(img.img,pos.x-DROP_L/2,pos.y- DROP_L/2,0,xscale,yscale)
+  
+          love.graphics.setColor(0.615,0,1)
+          love.graphics.rectangle("line",pos.x-DROP_L/2,pos.y - DROP_L/2,DROP_L,DROP_L)
+        end
+      end
+
+      if e.shoot_target ~= nil then
+        local et = world.entities[e.shoot_target]
+        if et ~= nil and et.alive then
+          target_draw_pos = world_to_screen(et.x,et.y)
+        end
+      end
     end
   end
-  
 
-  local players = world.players
-  for username,p in pairs(players) do
-    -- Move target
-    if username == DEFAULT_USERNAME and p.move_target ~= nil then
-      local tpos = world_to_screen(p.move_target.x,p.move_target.y)
-      love.graphics.setColor(0,1,0)
-      love.graphics.circle("fill",tpos.x,tpos.y,PLAYER_L/8)
-    end
-
-    -- Player drops
-    for _,drop in pairs(p.drops) do
-      local parts = split_spaces(drop.name)
-      local pos = world_to_screen(drop.x,drop.y)
-      if parts[1] == "ability" then
-        local img = get_image(parts[2])
-        local xscale = DROP_L / img.w
-        local yscale = DROP_L / img.h
-        love.graphics.setColor(1,1,1)
-        love.graphics.draw(img.img,pos.x-DROP_L/2,pos.y- DROP_L/2,0,xscale,yscale)
-
-        love.graphics.setColor(0.615,0,1)
-        love.graphics.rectangle("line",pos.x-DROP_L/2,pos.y - DROP_L/2,DROP_L,DROP_L)
-      end
-    end
-
-    -- Player avatar
-    local pos = world_to_screen(p.x,p.y)
-    local img = get_image(p.avatar)
-    local xscale = PLAYER_L / img.w
-    local yscale = PLAYER_L / img.h
+  if target_draw_pos then
+    local img = get_image("target")
+    local xscale = PLAYER_L / img.w / 2
+    local yscale = PLAYER_L / img.h / 2
     love.graphics.setColor(1,1,1)
-    love.graphics.draw(img.img,pos.x - PLAYER_L/2,pos.y - PLAYER_L/2,0,xscale,yscale)
-
-    -- Player abilities
-    for aname,aabils in pairs(player.active_abilities) do
-      for _,aabil in pairs(aabils) do
-        aabil.draw()
-      end
-    end
-
-    -- Player shoot target
-    if username == DEFAULT_USERNAME and p.shoot_target ~= nil then
-      local spos = nil
-      local wt = PLAYER_L
-      local ht = PLAYER_L
-      if p.shoot_target.type == "pos" then
-        spos = world_to_screen(p.shoot_target.x,p.shoot_target.y)
-      elseif p.shoot_target.type == "entity" then
-        local ent = get_entity(p.shoot_target.name)
-        if ent == nil or not ent.alive then
-          goto notarget
-        end
-        spos = world_to_screen(ent.x,ent.y)
-        wt = ent.w
-        ht = ent.h
-      else
-        spos = world_to_screen(0,0)
-      end
-      local img = get_image("target")
-      local xscale = PLAYER_L / img.w / 2
-      local yscale = PLAYER_L / img.h / 2
-      love.graphics.setColor(1,1,1)
-      love.graphics.draw(img.img,spos.x - PLAYER_L / 4, spos.y - PLAYER_L / 4,0,xscale,yscale)
-    end
-
-
-
-    ::notarget::
+    love.graphics.draw(img.img,target_draw_pos.x - PLAYER_L / 4, target_draw_pos.y - PLAYER_L / 4,0,xscale,yscale)
   end
 
   local bullets = world.bullets
   for _,bullet in pairs(bullets) do
     local bpos = world_to_screen(bullet.x,bullet.y)
-    if bullet.target.type == "player" then
+    local bullet_target = world.entities[bullet.target]
+    if not bullet_target.enemy then
       love.graphics.setColor(1,0,0)
     else
       love.graphics.setColor(0,0,1)
@@ -1358,7 +1153,9 @@ function world_draw()
 
   world_draw_objects("above")
 
-  if world_dbg_showfog then
+  local player = world.entities[curr_entity]
+
+  if world_dbg_showfog and player.player then
     -- Create fog mask
     local maskcanvas = love.graphics.newCanvas(love.graphics.getWidth(),love.graphics.getHeight())
     
@@ -1366,7 +1163,7 @@ function world_draw()
     love.graphics.clear(1,1,1,1)
     love.graphics.setBlendMode("multiply","premultiplied")
     love.graphics.setColor(0,0,0,0)
-    for zname,_ in pairs(player.discovered_zones) do
+    for zname,_ in pairs(player.player_discovered_zones) do
       local zone = world.zones[zname]
       for i,region in pairs(zone.regions) do
         local p1 = world_to_screen(region.x1,region.y1)
@@ -1400,97 +1197,7 @@ function world_draw()
 
 end
 
-----> Have player shoot at something
-function shoot_bullet(player)
-  if player.shoot_target ~= nil then
-    local new_bullet = {
-      source = "player " .. player.username,
-      x = player.x,
-      y = player.y,
-      flying = true,
-    }
 
-    if player.shoot_target.type == "entity" then
-      local ent = get_entity(player.shoot_target.name)
-      if ent == nil or not ent.alive then
-        player.shoot_target = nil
-        return
-      end
-
-      new_bullet.target = {
-        type = "entity",
-        name = player.shoot_target.name
-      }
-    elseif player.shoot_target.type == "pos" then
-      new_bullet.target = {
-        type = "pos",
-        x = player.shoot_target.x,
-        y = player.shoot_target.y
-      }
-    else
-      new_bullet.target = {
-        type = "pos",
-        x = 0,
-        y = 0
-      }
-    end
-
-    table.insert(world.bullets,new_bullet)
-  end
-end
-
-----> Have entity shoot at something
-function entity_shoot_bullet(ename)
-  local entity = world.entities[ename]
-  if entity == nil then return false end
-
-  if entity.shoot_target ~= nil then
-    local new_bullet = {
-      source = "entity " .. ename,
-      x = entity.x,
-      y = entity.y,
-      flying = true,
-    }
-
-    if entity.shoot_target.type == "entity" then
-      local ent = get_entity(entity.shoot_target.name)
-      if ent == nil or not ent.alive then
-        entity.shoot_target = nil
-        return
-      end
-
-      new_bullet.target = {
-        type = "entity",
-        name = entity.shoot_target.name
-      }
-    elseif entity.shoot_target.type == "pos" then
-      new_bullet.target = {
-        type = "pos",
-        x = entity.shoot_target.x,
-        y = entity.shoot_target.y
-      }
-    elseif entity.shoot_target.type == "player" then
-      local player = world.players[entity.shoot_target.name]
-      if player == nil then
-        entity.shoot_target = nil
-        return
-      end
-
-      new_bullet.target = {
-        type = "player",
-        name = entity.shoot_target.name
-      }
-    else
-      new_bullet.target = {
-        type = "pos",
-        x = 0,
-        y = 0
-      }
-    end
-
-    table.insert(world.bullets,new_bullet)
-  end
-end
 
 function check_collision(x,y,w,h,xo,yo,wo,ho)
   local x_coll = (x <= xo and (x + w / 2 >= xo - wo / 2)) or (x >= xo and (x - w / 2 <= xo + wo / 2))
@@ -1656,9 +1363,6 @@ function adjust_pos_for_collisions(pos,w,h)
   if fog_overlap ~= nil then
     pos.x = pos.x - fog_overlap.x
     pos.y = pos.y - fog_overlap.y
-
-
-    pos.arrived = false
   end
 
   local collisions = check_all_collisions(pos.x,pos.y,w,h)
@@ -1677,136 +1381,26 @@ function adjust_pos_for_collisions(pos,w,h)
   end
 end
 
-----> Update player
-function update_player(player,tick)
-  if player.move_target ~= nil then
-    local new_pos = new_pos(player.x,player.y,player.move_target.x,player.move_target.y,defs.MOVE_SPEED)
-    adjust_pos_for_collisions(new_pos,PLAYER_L,PLAYER_L)
-    
-    player.x = new_pos.x
-    player.y = new_pos.y
-    if new_pos.arrived then
-      player.move_target = nil
-    end
-  end
-
-  -- Player abilities
-  for aname,aabils in pairs(player.active_abilities) do
-    for id,aabil in pairs(aabils) do
-      local ability_def = Abilities[aname]
-      local cancel = false
-
-      -- Cancel stationary ability if player moves
-      if ability_def.stationary then
-        if player.move_target ~= nil then
-          cancel = true
-        end
-      end
-
-      -- Cancel channeling if player uses another ability or shoots
-      if ability_def.channel then
-        if player.ability_channeling ~= aabil or player.shooting ~= false then
-          cancel = true
-        end
-      end
-
-      if not cancel then
-        local active = aabil.update()
-        if not active then cancel = true end
-      end
-
-      if cancel then
-        aabils[id] = nil
-      end
-    end
-  end
-
-  if player.shooting and player.shoot_target ~= nil then
-    local shoot_speed = player.shoot_speed
-    for _,rage in pairs(player.active_abilities["rage"]) do
-      shoot_speed = shoot_speed * 2
-    end
-    local shoot_period = TPS / shoot_speed
-
-    local target_pos = get_target_pos(player.shoot_target)
-    if target_pos ~= nil then
-      local target_dist = utils.euclid(target_pos.x,target_pos.y,player.x,player.y)
-      if target_dist <= utils.get_pixel_range(player.range) then
-        if player.last_shoot == nil or tick - player.last_shoot > shoot_period then
-          shoot_bullet(player)
-          player.last_shoot = tick
-        end
-      end
-    end
-  end
-
-  -- Discover zones
-  if world.zones ~= nil then
-    for name,zone in pairs(world.zones) do
-      if not player.discovered_zones[name] then
-        for i,region in pairs(zone.regions) do
-          if region.x1 < player.x and player.x < region.x2 and region.y1 < player.y and player.y < region.y2 then
-            player.discovered_zones[name] = true
-            zone.discovered = true
-            log_info("Discovered " .. name)
-            goto continuezone
-          end
-        end
-      end
-
-      ::continuezone::
-    end
-  end
-
-  game_dbg_pos = {
-    x = player.x,
-    y = player.y
-  }
-end
-
 ----> Can use ability
-function can_use_ability(username,ability_name)
-  local ability_def = Abilities[ability_name]
-  local player = world.players[username]
-  if ability_def == nil or player == nil then return false end
+function can_use_ability(ename,ability_name)
+  local ability_def = abilities[ability_name]
+  local entity = world.entities[ename]
+  if ability_def == nil or entity == nil then return false end
 
-  if player.abilities[ability_name].locked then return false end
+  if entity.abilities[ability_name].locked then return false end
 
   if ability_def.target then
-    if player.shoot_target == nil then
+    if entity.shoot_target == nil then
       return false
     end
     
-    local target = nil
-    if player.shoot_target.type == "entity" then
-      local ent = world.entities[player.shoot_target.name]
-      if ent == nil or not ent.alive then
-        return false
-      end
-
-      target = {
-        x = ent.x,
-        y = ent.y
-      }
-    elseif player.shoot_target.type == "player" and world.players[player.shoot_target.name] ~= nil then
-      local player = world.players[player.shoot_target.name]
-      if player == nil then
-        return false
-      end
-
-      target = {
-        x = player.x,
-        y = player.y
-      }
-    elseif player.shoot_target.type == "pos" then
-      target = {
-        x = player.shoot_target.x,
-        y = player.shoot_target.y
-      }
+    local target = world.entities[entity.shoot_target]
+    if target == nil or not target.alive then
+      return false
     end
 
-    local pixelrange = ability_def.range * defs.MOVE_SPEED
-    local dist = utils.euclid(target.x,target.y,player.x,player.y)
+    local pixelrange = ability_def.range * entity.move_speed * defs.MOVE_SPEED
+    local dist = utils.euclid(target.x,target.y,entity.x,entity.y)
 
     if dist > pixelrange then
       return false
@@ -1817,52 +1411,50 @@ function can_use_ability(username,ability_name)
 end
 
 ----> Player uses ability
-function use_ability(username,ability_num)
-  if world ~= nil and world.players[username] ~= nil then
-    local player = world.players[username]
-
-    local ability_name = player.ability_map[ability_num]
-    local ability_def = Abilities[ability_name]
-    if not can_use_ability(player.username,ability_name) then
+function use_ability(entity_name,ability_num)
+  local entity = world.entities[entity_name]
+  if world ~= nil and entity ~= nil then
+    local ability_name = entity.ability_map[ability_num]
+    local ability_def = abilities[ability_name]
+    if not can_use_ability(entity_name,ability_name) then
       log_info("Can't use" .. ability_name)
       return
     end
 
     -- Lock ability
-    player.abilities[ability_name].locked = true
+    entity.abilities[ability_name].locked = true
 
     -- Stationary ability
     if ability_def.stationary then
-      player.move_target = nil -- Stationary
-      last_move_s = love.timer.getTime()
+      entity.move_target = nil -- Stationary
     end
 
     -- Call use
-    local active_ability = ability_def.use(world,player)
+    local active_ability = ability_def.use(world,entity)
     if active_ability == nil then
       log_info("Failed to use " .. ability_name)
       return
     end
 
     -- Unlock abilities
-    if player.charge >= CHARGE_TO_UNLOCK then
-      unlock_random(username)
+    if entity.charge >= CHARGE_TO_UNLOCK then
+      unlock_random(entity_name)
     end
 
     -- Channel ability
     if ability_def.channel then
-      player.ability_channeling = active_ability
-      player.shooting = false
+      entity.ability_channeling = active_ability
+      entity.shooting = false
     else
-      player.ability_channeling = nil
+      entity.ability_channeling = nil
     end
 
     if active_ability ~= nil then
       local id = active_ability.id
       if id == nil then id = id() end
 
-      player.active_abilities[ability_name][id] = active_ability
-      player.abilities[ability_name].times_used = player.abilities[ability_name].times_used + 1 -- Lua moment
+      entity.active_abilities[ability_name][id] = active_ability
+      entity.abilities[ability_name].times_used = entity.abilities[ability_name].times_used + 1 -- Lua moment
     end
   end
 end
@@ -1892,10 +1484,10 @@ function create_hit_particle(damage,x,y,h)
 end
 
 ----> Deal entity damage
-function deal_entity_damage(ename,dmg,interrupt)
+function deal_damage(ename,dmg,interrupt)
   if interrupt == nil then interrupt = false end
 
-  local ent = get_entity(ename)
+  local ent = world.entities[ename]
 
   if ent == nil or not ent.alive then
     return
@@ -1908,15 +1500,16 @@ function deal_entity_damage(ename,dmg,interrupt)
   -- Die
   if ent.hp <= 0 then
     if ent.drops ~= nil then
-      local players = world.players
-      for name,player in pairs(players) do
-        for _,drop in pairs(ent.drops) do
-          if math.random() < drop.rate then
-            table.insert(player.drops,{
-              name = drop.name,
-              x = ent.x + (0.5 - math.random()) * DROP_L / 2,
-              y = ent.y + (0.5 - math.random()) * DROP_L / 2
-            })
+      for ename,e in pairs(world.entities) do
+        if e.player then
+          for _,drop in pairs(ent.drops) do
+            if math.random() < drop.rate then
+              table.insert(e.drops,{
+                name = drop.name,
+                x = ent.x + (0.5 - math.random()) * DROP_L / 2,
+                y = ent.y + (0.5 - math.random()) * DROP_L / 2
+              })
+            end
           end
         end
       end
@@ -1927,37 +1520,18 @@ function deal_entity_damage(ename,dmg,interrupt)
   end
 end
 
-----> Deal player damage
-function deal_player_damage(username,dmg,interrupt)
-  if interrupt == nil then interrupt = false end
-
-  local player = world.players[username]
-  if player == nil then return end
-
-  player.hp = player.hp - dmg
-
-  create_hit_particle(dmg,player.x,player.y,PLAYER_L/2 + 20)
-  
-  -- Die
-  if player.hp <= 0 then
-    -- Remove the entity
-    world_join(username)
-  end
-end
-
 ----> Unlock a random ability
-function unlock_random(username,exclude,reset_charge)
+function unlock_random(entity,exclude,reset_charge)
   if reset_charge == nil then reset_charge = true end
 
-  if world.players[username] == nil then
+  if entity == nil then
     return
   end
   
-  local player = world.players[username]
   local n_unlocked = 0
   local n_locked = 0
   local locked_abils = {}
-  for aname,abil in pairs(player.abilities) do
+  for aname,abil in pairs(entity.abilities) do
     if not abil.locked then
       n_unlocked = n_unlocked + 1
     elseif abil.slot ~= -1 then
@@ -1968,51 +1542,36 @@ function unlock_random(username,exclude,reset_charge)
     end
   end
 
-  if n_unlocked < MAX_UNLOCKED then
+  if n_locked ~= 0 and n_unlocked < MAX_UNLOCKED then
     local i = math.random(1,n_locked)
     local unlocking = locked_abils[i]
-    if reset_charge then player.charge = 0 end
-    player.abilities[unlocking].locked = false
+    if reset_charge then entity.charge = 0 end
+    entity.abilities[unlocking].locked = false
   end
 end
 
 ----> Resolve bullet
 function resolve_bullet(bullet)
   -- Create hit particle
-  local source = bullet.source
-  local source_parts = split_spaces(source)
-  if source_parts[1] == "player" then
-    if world.players[source_parts[2]] ~= nil then
-      local player = world.players[source_parts[2]]
-      if bullet.target.type == "entity" then
-        deal_entity_damage(bullet.target.name,player.damage)
-      end
+  local source = world.entities[bullet.source]
+  if source ~= nil and source.alive then
 
-      player.charge = player.charge + 1
-      if player.charge >= CHARGE_TO_UNLOCK then
-        player.charge = CHARGE_TO_UNLOCK
-        unlock_random(source_parts[2])
-      end
+    source.charge = source.charge + 1
+    if source.charge >= CHARGE_TO_UNLOCK then
+      source.charge = CHARGE_TO_UNLOCK
+      unlock_random(source)
     end
-  elseif source_parts[1] == "entity" then
-    local entity = world.entities[source_parts[2]]
-    if entity ~= nil and entity.alive then
-      local entity = world.entities[source_parts[2]]
-      if bullet.target.type == "entity" then
-        deal_entity_damage(bullet.target.name,entity.damage)
-      elseif bullet.target.type == "player" then
-        deal_player_damage(bullet.target.name,entity.damage,false)
-      end
-    end
+
+    deal_damage(bullet.target,source.damage)
   end
 end
 
 ----> Player pickup drop
 function pickup(username,i)
-  local player = world.players[username]
+  local player = world.entities[username]
   if player ~= nil then
-    local drop_name = player.drops[i].name
-    local parts = split_spaces(drop_name)
+    local loot_name = player.player_loot[i].name
+    local parts = split_spaces(loot_name)
 
     if parts[1] == "ability" then
       if player.abilities[parts[2]] == nil then
@@ -2020,24 +1579,23 @@ function pickup(username,i)
           slot = -1,
           times_used = 0
         }
+        player.active_abilities[parts[2]] = {}
       end
     end
 
-    player.drops[i] = nil
+    player.player_loot[i] = nil
   end
 end
 
 ----> Interact with object
 function interact(username,layer,objname)
-  local player = world.players[username]
+  local player = world.entities[username]
   if player ~= nil and world.objects[layer] ~= nil then
     local obj = world.objects[layer][objname]
 
     if obj.isa ~= nil then
       if obj.isa == "lectern" then
-        if ui["abilities_book"] ~= nil then
-          ui["abilities_book"].visible = true
-        end
+        player.player_ability_book_open = true
       end
     end
   end
@@ -2049,18 +1607,20 @@ function world_update()
     world.tick = world.tick + 1
     world_dbg_tick = world.tick
     
-    local players = world.players
-    for name,player in pairs(players) do
-      update_player(player,world.tick)
-    end
+    for ename,entity in pairs(world.entities) do
+      -- update player
+      if entity.name == curr_entity then
+        -- View
+        if entity.player_ability_book_open and ui["abilities_book"] ~= nil then
+          ui["abilities_book"].visible = true
+        else
+          ui["abilities_book"].visible = false
+        end
+      end
 
-    local world_entities = world.entities
-    for ename,entity in pairs(world_entities) do
       if not entity.alive then
         goto continue
       end
-
-      local parts = split_delim(ename,".")
 
       if entity.zone ~= nil and not world.zones[entity.zone].discovered then
         goto continue
@@ -2071,26 +1631,25 @@ function world_update()
 
       -- Check minion ability is still active
       if entity.summon then
-        local player_name = parts[2]
+        local parent_name = entity.parent
+        local parent_ability = entity.parent_ability
 
         local active = false
-        local summon_ability = parts[1]
-        local id = parts[3]
 
-        local player = world.players[player_name]
-        if player ~= nil and player.active_abilities[summon_ability] ~= nil and player.active_abilities[summon_ability][id] ~= nil then
+        local parent = world.players[parent_name]
+        if parent ~= nil and parent.active_abilities[parent_ability] ~= nil and parent.active_abilities[parent_ability][id] ~= nil then
           active = true
         end
 
         if not active then
-          world.entities[ename] = nil
+          entity.alive = false
           goto continue
         end
       end
 
       -- Entity move
       if entity.move_target ~= nil then
-        local new_pos = new_pos(entity.x,entity.y,entity.move_target.x,entity.move_target.y,defs.MOVE_SPEED * entity.move_speed)
+        local new_pos = utils.new_pos(entity.x,entity.y,entity.move_target.x,entity.move_target.y,defs.MOVE_SPEED * entity.move_speed)
         adjust_pos_for_collisions(new_pos,PLAYER_L,PLAYER_L)
         
         entity.x = new_pos.x
@@ -2101,16 +1660,16 @@ function world_update()
       end
 
       -- Entity shoot
-      if entity.shoot_target ~= nil then
+      if entity.shoot_target ~= nil and entity.shooting then
         local shoot_speed = entity.shoot_speed
-        local shoot_period = TPS / shoot_speed
+        local shoot_period = defs.TPS / shoot_speed
 
         local target_pos = get_target_pos(entity.shoot_target)
         if target_pos ~= nil then
           local target_dist = utils.euclid(entity.x,entity.y,target_pos.x,target_pos.y)
           if target_dist <= utils.get_pixel_range(entity.range) then
             if entity.last_shoot == nil or world.tick - entity.last_shoot > shoot_period then
-              entity_shoot_bullet(ename)
+              entities.shoot_bullet(world,entity)
               entity.last_shoot = world.tick
             end
           end
@@ -2122,32 +1681,14 @@ function world_update()
 
     local bullets = world.bullets
     for i,bullet in pairs(bullets) do
-      local source_parts = split_spaces(bullet.source)
+      local source = world.entities[bullet.source]
+      local target = world.entities[bullet.target]
 
-      if bullet.target ~= nil then
-        local p = nil
-        if bullet.target.type == "entity" then
-          local ent = get_entity(bullet.target.name)
-          if ent == nil or not ent.alive then
-            bullets[i] = nil
-            goto continue
-          end
-          p = new_pos(bullet.x,bullet.y,ent.x,ent.y,BULLET_SPEED)
-        elseif bullet.target.type == "pos" then
-          p = new_pos(bullet.x,bullet.y,bullet.target.x,bullet.target.y,BULLET_SPEED)
-        elseif bullet.target.type == "player" then
-          local player = world.players[bullet.target.name]
-          if player == nil then
-            bullets[i] = nil
-            goto continue
-          end
-
-          p = new_pos(bullet.x,bullet.y,player.x,player.y,BULLET_SPEED)
-        else return
-        end
-
-        local collisions = check_all_collisions(p.x,p.y,BULLET_RADIUS*1.4,BULLET_RADIUS*1.4)
-
+      if source == nil or not source.alive or target == nil or not target.alive then
+        bullets[i] = nil
+      else
+        local p = utils.new_pos(bullet.x,bullet.y,target.x,target.y,BULLET_SPEED)
+        local collisions = check_all_collisions(p.x,p.y,BULLET_RADIUS * 1.4, BULLET_RADIUS * 1.4)
         for _,collision in pairs(collisions) do
           bullets[i] = nil
           goto continue
@@ -2156,30 +1697,23 @@ function world_update()
         bullet.x = p.x
         bullet.y = p.y
         if p.arrived then
-          bullet.flying = false
-        end
-      end
+          local has_reflect = false
 
-      if not bullet.flying then
-        local has_reflect = false
+          if target.active_abilities["reflect"] ~= nil then
+            for i,abil in pairs(target.active_abilities["reflect"]) do
+              has_reflect = true
+            end
+          end
 
-        if bullet.target.type == "player" then
-          local player = world.players[bullet.target.name]
-
-          for i,abil in pairs(player.active_abilities["reflect"]) do
-            has_reflect = true
+          if has_reflect then
+            bullet.target = bullet.source
+          else
+            resolve_bullet(bullet)
+            bullets[i] = nil
           end
         end
-
-        if has_reflect then
-          bullet.target.type = source_parts[1]
-          bullet.target.name = source_parts[2]
-          bullet.flying = true
-        else
-          resolve_bullet(bullet)
-          bullets[i] = nil 
-        end
       end
+
       ::continue::
     end
   end
@@ -2279,19 +1813,7 @@ function world_load(world_deets)
   local new_world_entities = {}
   if world_deets.entities ~= nil then
     for ename,edef in pairs(world_deets.entities) do
-      log_info(json.encode(edef))
-      log_info(json.encode(edef.visible))
-      new_world_entities[ename] = entities.create(
-        edef.type,
-        edef.sprite,
-        edef.visible,
-        edef.zone,
-        edef.x,
-        edef.y,
-        edef.w,
-        edef.h,
-        nil
-      )
+      new_world_entities[ename] = entities.create_enemy(edef.type,edef.sprite,edef.visible,edef.zone,edef.x,edef.y,edef.w,edef.h,ename)
     end
   end
 
@@ -2334,99 +1856,25 @@ function world_load(world_deets)
   world = new_world
 end
 
-----> Get player deets
-function get_player_deets(username)
-  
-end
-
 ----> Join world
 function world_join(username)
   log_info(username .. " joined!")
+  curr_entity = "player."..username
+
+  local new_entity = entities.create_player(DEFAULT_PLAYER.avatar,world.spawn.x,world.spawn.y,PLAYER_L,PLAYER_L,DEFAULT_PLAYER.abilities,curr_entity)
   
-  local abils = {}
-  local abilmap = {}
-  for name,abil in pairs(DEFAULT_PLAYER.abilities) do
-    abils[name] = {
-      locked = abil.locked,
-      times_used = abil.times_used,
-      slot = abil.slot
-    }
-    if abil.slot ~= -1 then
-      abilmap[abil.slot] = name
-    end
-  end
-
-  local active_abils = {}
-  for name,abildef in pairs(Abilities) do
-    active_abils[name] = {}
-  end
-
-
-  local spawn = world.spawn
-  local new_player = {
-    username = username,
-    abilities = abils,
-    ability_map = abilmap,
-    active_abilities = active_abils,
-    avatar = DEFAULT_PLAYER.avatar,
-    shoot_speed = DEFAULT_PLAYER.shoot_speed,
-    damage = DEFAULT_PLAYER.damage,
-    hp = DEFAULT_PLAYER.hp,
-    range = DEFAULT_PLAYER.range,
-    discovered_zones = {},
-    charge = 0,
-    drops = {},
-    x = spawn.x,
-    y = spawn.y,
-    move_target = nil,
-    shoot_target = nil,
-    shooting = false,
-    last_shoot = nil,
-  }
-  
-  world.players[username] = new_player
-end
-
-----> Set move target
-function set_target(username,x,y)
-  if world ~= nil and world.players[username] ~= nil then
-    local player = world.players[username]
-    player.move_target = {
-      x = x,
-      y = y
-    }
-  end
-end
-
-----> Check if player is shooting
-function is_shooting(username)
-  if world ~= nil and world.players[username] ~= nil then
-    return world.players[username].shooting
-  end
-end
-
-----> Set player shooting
-function set_shooting(username,is_shooting)
-  if world ~= nil and world.players[username] ~= nil then
-    world.players[username].shooting = is_shooting
-  end
-end
-function toggle_shooting(username)
-  log_info("Toggling shooting for " .. username)
-  if world ~= nil and world.players[username] ~= nil then
-    world.players[username].shooting = not world.players[username].shooting
-  end
+  world.entities["player."..username] = new_entity
 end
 
 ----> Set shoot target position
-function set_shoot_target(username,x,y)
-  if world ~= nil and world.players[username] ~= nil then
-    local player = world.players[username]
+function set_shoot_target(x,y)
+  if world ~= nil and world.entities[curr_entity] ~= nil then
+    local player = world.entities[curr_entity]
     
     local closest = nil
     local distance = nil
     for ename,e in pairs(world.entities) do
-      if e.targetable and e.enemy and e.alive then
+      if e.targetable and (e.enemy ~= player.enemy) and e.alive then
         local d = utils.euclid(x,y,e.x,e.y)
         if closest == nil or d < distance then
           closest = ename
@@ -2436,35 +1884,25 @@ function set_shoot_target(username,x,y)
     end
 
     if closest ~= nil then
-      player.shoot_target = {
-        type = "entity",
-        name = closest
-      }
+      player.shoot_target = closest
     end
   end
 end
-function clear_shoot_target(username)
-  if world ~= nil and world.players[username] ~= nil then
-    local player = world.players[username]
 
-    player.shoot_target = nil
-  end
-end
-
-function shoot_nearest(username)
-  if world ~= nil and world.players[username] ~= nil then
-    local player = world.players[username]
-    set_shoot_target(username,player.x,player.y)
+function shoot_nearest()
+  if world ~= nil and world.entities[curr_entity] ~= nil then
+    local player = world.entities[curr_entity]
+    set_shoot_target(player.x,player.y)
   end
 end
 
 ----> Convert screen to world
 function screen_to_world(x,y)
-  if world == nil or world.players[DEFAULT_USERNAME] == nil then
+  if world == nil or world.entities[curr_entity] == nil then
     return nil
   end
   
-  local player = world.players[DEFAULT_USERNAME]
+  local player = world.entities[curr_entity]
   local sc = screen_coords(player.x,player.y)
   
   return {
@@ -2475,11 +1913,11 @@ end
 
 ----> Convert world to screen
 function world_to_screen(x,y)
-  if world == nil or world.players[DEFAULT_USERNAME] == nil then
+  if world == nil or world.entities[curr_entity] == nil then
     return nil
   end
   
-  local player = world.players[DEFAULT_USERNAME]
+  local player = world.entities[curr_entity]
   local sc = screen_coords(player.x,player.y)
   
   return {
@@ -2493,8 +1931,6 @@ end
 ----> Initialise
 function game_init()
   game_keyhandlers = {}
-  clicking = false
-  last_move_s = love.timer.getTime()
   game_dbg_pos = nil
   particles = {}
 end
@@ -2504,7 +1940,10 @@ function move_char()
   local mx, my = love.mouse.getPosition()  
   local new_pos = screen_to_world(mx,my)
       
-  set_target(DEFAULT_USERNAME,new_pos.x,new_pos.y)
+  world.entities[curr_entity].move_target = {
+    x = new_pos.x,
+    y = new_pos.y
+  }
 end
 
 ----> Update
@@ -2547,7 +1986,7 @@ end
 
 ----> Draw
 function game_draw()
-  if world ~= nil and world.players[DEFAULT_USERNAME] ~= nil then
+  if world ~= nil and world.entities[curr_entity] ~= nil then
     world_draw()
     game_draw_particles()
   else
@@ -2557,12 +1996,12 @@ end
 
 ----> Generic action
 function action()
-  if world ~= nil and world.players[DEFAULT_USERNAME] ~= nil then
-    local player = world.players[DEFAULT_USERNAME]
+  if world ~= nil and world.entities[curr_entity] ~= nil then
+    local player = world.entities[curr_entity]
     local closest = nil
     local dist = nil
-    if player.drops ~= nil then
-      for i,drop in pairs(player.drops) do
+    if player.player_loot ~= nil then
+      for i,drop in pairs(player.player_loot) do
         local ddrop = utils.euclid(player.x,player.y,drop.x,drop.y)
         if ddrop < INTERACT_DIST and (closest == nil or ddrop < dist) then
           closest = "drop " .. tostring(i)
@@ -2608,9 +2047,9 @@ function action()
       -- Pick up drop
       if parts[1] == "drop" then
         local i = tonumber(parts[2])
-        pickup(DEFAULT_USERNAME,i)
+        pickup(curr_entity,i)
       elseif parts[1] == "object" then
-        interact(DEFAULT_USERNAME,parts[2],parts[3])
+        interact(curr_entity,parts[2],parts[3])
       end
     end
   end
@@ -2620,7 +2059,7 @@ end
 function ability_handler(key, pressed)
   if pressed then
     local ability_num = AbilityKey[key]
-    use_ability(DEFAULT_USERNAME,ability_num)
+    use_ability(curr_entity,ability_num)
   end
 end
 
@@ -2630,14 +2069,16 @@ function register_key_handlers()
     game_keyhandlers[k] = ability_handler
   end
   game_keyhandlers["space"] = function(key,pressed) if pressed then action() end end
-  game_keyhandlers["f"] = function(key,pressed) if pressed then toggle_shooting(DEFAULT_USERNAME) end end
+  game_keyhandlers["f"] = function(key,pressed) if pressed then 
+    world.entities[curr_entity].shooting = not world.entities[curr_entity].shooting
+    end end
   game_keyhandlers["d"] = function(key,pressed) 
     if pressed then 
-      clear_shoot_target(DEFAULT_USERNAME) 
-      set_shooting(DEFAULT_USERNAME,false)
+      world.entities[curr_entity].shoot_target = nil
+      world.entities[curr_entity].shooting = false
     end 
   end
-  game_keyhandlers["tab"] = function(key,pressed) if pressed then shoot_nearest(DEFAULT_USERNAME) end end
+  game_keyhandlers["tab"] = function(key,pressed) if pressed then shoot_nearest() end end
 end
 
 ----> Key handler
@@ -2649,9 +2090,7 @@ function game_keyhandler(key,pressed)
 end
 
 function game_mouse_released(button)
-  if button == 1 then
-    clicking = false
-  end
+
 end
 
 ----> Mouse handler
@@ -2659,12 +2098,9 @@ function game_mousehandler(x,y,button,pressed)
   if pressed then
     if button == 1 then
       move_char()
-      last_move_s = love.timer.getTime()
-      
-      clicking = true
     elseif button == 2 then
       local pos = screen_to_world(x,y)
-      set_shoot_target(DEFAULT_USERNAME,pos.x,pos.y)
+      set_shoot_target(pos.x,pos.y)
     end
   end
 end
@@ -2681,14 +2117,14 @@ end
 function ui_draw_abilities()
 
   local uidef = ui["abilities"]
-  if uidef == nil then return end
+  if uidef == nil or curr_entity == nil then return end
 
   local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
   
-  local player = world.players[DEFAULT_USERNAME]
-  local abilities = player.ability_map
+  local player = world.entities[curr_entity]
+  local player_abilities = player.ability_map
 
-  if abilities ~= nil then
+  if player_abilities ~= nil then
 
     local ability_key_inv = {}
     for key,ability_num in pairs(AbilityKey) do
@@ -2706,23 +2142,25 @@ function ui_draw_abilities()
     local lockl = (l-m) * 2/3
 
     for i = 1,10 do
-      local abil_def = Abilities[abilities[i]]
+      local abil_def = abilities[player_abilities[i]]
+
+      if abil_def == nil then goto continue end
 
       love.graphics.setColor(Color["blue"])
       love.graphics.rectangle('fill',p0.x + dx,p0.y + dy,l,l)
 
-      local ability_img = get_image(abilities[i])
+      local ability_img = get_image(player_abilities[i])
       local xscale = imgl / ability_img.w
       local yscale = imgl / ability_img.h
       love.graphics.setColor(1,1,1,1)
       love.graphics.draw(ability_img.img,p0.x + dx + m / 2, p0.y + dy+ m/2, 0, xscale, yscale)
 
-      if not can_use_ability(player.username,abilities[i]) then
+      if not can_use_ability(player.name,player_abilities[i]) then
         love.graphics.setColor(1,0,0,0.5)
         love.graphics.rectangle("fill",p0.x + dx + m/2, p0.y + dy + m/2,imgl,imgl)
       end
 
-      if player.abilities[abilities[i]].locked then
+      if player.abilities[player_abilities[i]].locked then
         local lock_img = get_image("lock")
         local xscale = lockl / lock_img.w
         local yscale = lockl / lock_img.h
@@ -2741,6 +2179,8 @@ function ui_draw_abilities()
         dx = 0
         dy = dy + m + l
       end
+
+      ::continue::
     end
   end
 end
@@ -2779,15 +2219,15 @@ end
 ----> Draw the abilities book
 function ui_draw_abilities_book()
   local uidef = ui["abilities_book"]
-  if uidef == nil then return end
+  if uidef == nil or curr_entity == nil then return end
 
   local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
 
   local divs = ui_divide_abilities_book()
 
-  local player = world.players[DEFAULT_USERNAME]
+  local player = world.entities[curr_entity]
   local ability_map = player.ability_map
-  local abilities = player.abilities
+  local player_abilities = player.abilities
 
   love.graphics.setColor(0,0,0)
   love.graphics.rectangle("fill",p0.x,p0.y,uidef.w,uidef.h)
@@ -2854,7 +2294,7 @@ function ui_draw_abilities_book()
   x = divs.x_learned
   y = divs.y_known
   local i = 1
-  for aname,ability in pairs(abilities) do
+  for aname,ability in pairs(player_abilities) do
     local ability_img = get_image(aname)
     local xscale = il / ability_img.w
     local yscale = il / ability_img.h
@@ -2892,7 +2332,7 @@ function ui_draw_abilities_book()
   love.graphics.print("Ability Info",divs.x_ability_info,divs.y_learned_title)
 
   if uidef.selected ~= nil then
-    local selected_ability = Abilities[uidef.selected]
+    local selected_ability = abilities[uidef.selected]
 
     local img = get_image(uidef.selected)
     local xscale = UI_ABILITY_LEN / img.w
@@ -2974,9 +2414,11 @@ end
 function ui_draw_charge_bar()
   local uidef = ui["charge_bar"]
 
+  if uidef == nil or curr_entity == nil then return end
+
   local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
 
-  local player = world.players[DEFAULT_USERNAME]
+  local player = world.entities[curr_entity]
 
   local charge_ratio = player.charge / CHARGE_TO_UNLOCK
 
@@ -2989,17 +2431,19 @@ end
 function ui_draw_health_bar()
   local uidef = ui["health_bar"]
 
+  if uidef == nil or curr_entity == nil then return end
+
   local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
 
   local default_font = love.graphics.newFont()
   local large_font = love.graphics.newFont(20)
 
-  local player = world.players[DEFAULT_USERNAME]
+  local player = world.entities[curr_entity]
 
-  local health_ratio = player.hp / PLAYER_HP
+  local health_ratio = player.hp / player.max_hp
 
   love.graphics.setFont(large_font)
-  local text = "HP: " .. player.hp .. " / " .. tostring(PLAYER_HP)
+  local text = "HP: " .. player.hp .. " / " .. tostring(player.max_hp)
   local th = large_font:getHeight(text)
   local tw = large_font:getWidth("HP: 1000 / 1000")
 
@@ -3056,7 +2500,7 @@ function ui_mousehandler_abilities(x,y,button,pressed)
     
     if 1 <= yi and yi <= 2 and 1 <= xi and xi <= 5 then
       local i = (yi - 1) * 5 + xi
-      use_ability(DEFAULT_USERNAME,i)
+      use_ability(curr_entity,i)
       return true
     end
   end
@@ -3069,9 +2513,11 @@ function ui_mousehandler_abilities_book(x,y,button,pressed)
   local uidef = ui["abilities_book"]
   if uidef == nil then return end
 
+  local player = world.entities[curr_entity]
   local p0 = get_anchor_point(uidef.anchor,uidef.x_off,uidef.y_off,uidef.w,uidef.h)
 
   if x < p0.x or x > (p0.x + uidef.w) or y < p0.y or y > (p0.y + uidef.h) then
+    player.player_ability_book_open = false
     uidef.visible = false
     uidef.selected = nil
     uidef.learning = false
@@ -3083,12 +2529,11 @@ function ui_mousehandler_abilities_book(x,y,button,pressed)
   local il = UI_ABILITY_ICON_LEN
   local im = UI_ABILITY_ICON_MARGIN
 
-  local player = world.players[DEFAULT_USERNAME]
   local ability_map = player.ability_map
-  local abilities = player.abilities
+  local player_abilities = player.abilities
 
   local abilities_indices = {}
-  for aname,ability in pairs(abilities) do
+  for aname,ability in pairs(player_abilities) do
     table.insert(abilities_indices,aname)
   end
 
@@ -3096,6 +2541,7 @@ function ui_mousehandler_abilities_book(x,y,button,pressed)
 
   -- Check close button
   if x > divs.x_close and x < divs.x_close + bh and y > divs.y_close and y < divs.y_close + bh then
+    player.player_ability_book_open = false
     uidef.visible = false
     uidef.selected = nil
     uidef.learning = false
@@ -3115,10 +2561,10 @@ function ui_mousehandler_abilities_book(x,y,button,pressed)
     if uidef.learning and uidef.selected ~= ability_map[i] then
       uidef.learning = false
 
-      local selected_ability_def = abilities[uidef.selected]
+      local selected_ability_def = player_abilities[uidef.selected]
       
       local prev_ability = ability_map[i]
-      local prev_ability_def = abilities[prev_ability]
+      local prev_ability_def = player_abilities[prev_ability]
       local prev_slot = prev_ability_def.slot
 
       if selected_ability_def.slot ~= -1 then
@@ -3326,6 +2772,18 @@ function debug_command(input_str)
     else
       log_warning("fog [show | hide]")
     end
+  elseif command == "possess" then
+    if world.entities[split_command[2]] ~= nil then
+      curr_entity = split_command[2]
+    else
+      log_warning("Could not possess that entity")
+    end
+  elseif command == "listent" then
+    local ents = ""
+    for ename,e in pairs(world.entities) do
+      ents = ents .. ename .. " "
+    end
+    log_info(ents)
   else
     log_warning("Unknown command: " .. command)
   end

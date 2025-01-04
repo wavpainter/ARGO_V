@@ -20,26 +20,34 @@ end
 function utils.get_target_pos(target,world)
     if target == nil then return nil end
 
-    if target.type == defs.TargetType.PLAYER then
-        local player = world.players[target.name]
-        if player == nil then
-            return nil
-        else 
-            return {
-                x = player.x,
-                y = player.y 
-            }
-        end
-    elseif target.type == defs.TargetType.ENTITY then
-        local entity = world.entities[target.name]
-        if entity == nil or not entity.alive then 
-            return nil
-        else
-            return {
-                x = entity.x,
-                y = entity.y
-            }
-        end
+    local entity = world.entities[target]
+    if entity == nil or not entity.alive then 
+        return nil
+    else
+        return {
+            x = entity.x,
+            y = entity.y
+        }
+    end
+end
+
+function utils.new_pos(x1,y1,x2,y2,speed)
+    local target_dist = math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2)
+    local t_remain = target_dist / speed
+    local dt = love.timer.getDelta()
+    if t_remain <= dt then
+        return {
+        arrived = true,
+        x = x2,
+        y = y2,
+        }
+    else
+        local scale = dt / t_remain
+        return {
+        arrived = false,
+        x = x1 + (x2 - x1) * scale,
+        y = y1 + (y2 - y1) * scale
+        }
     end
 end
 

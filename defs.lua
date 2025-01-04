@@ -8,5 +8,8 @@ defs.TargetType = {
     PLAYER = "player",
     ENTITY = "entity"
 }
+defs.PLAYER_HP = 1000
+defs.PLAYER_L = 75
+defs.TPS = 60
 
 return defs
