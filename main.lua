@@ -248,7 +248,7 @@ abilities["rage"].use = function(world,entity)
   local a = {}
   a.t0 = world.tick
   a.tf = world.tick + abilities["rage"].duration * defs.TPS
-  a.id = id()
+  a.id = utils.id()
   a.name = "rage"
 
   a.update = function()
@@ -266,159 +266,100 @@ abilities["rage"].use = function(world,entity)
   return a
 end
 
-abilities["cantrip"].use = function(world,entity)
+abilities["cantrip"].use = function(world,entity,active_abil)
   entities.unlock_random(world,entity,"cantrip",false)
 end
 
-abilities["summon"].use = function(world,entity)
-  local a = {}
-  a.t0 = world.tick
-  a.tf = world.tick + abilities["summon"].duration * defs.TPS
-  a.id = id()
-  a.name = "summon"
-
-  local summon_name = "summon." .. a.id
-
+abilities["summon"].use = function(world,entity,active_abil)
+  local summon_name = "summon." .. active_abil.id
   local entity = entities.create_summon("cat","summon",entity.x,entity.y,defs.PLAYER_L,defs.PLAYER_L,summon_name,entity.name,"summon",entity.enemy)
-
   world.entities[summon_name] = entity
-
-  a.update = function()
-    if world.tick > a.tf then
-      return false
-    else
-      return true
-    end
-  end
-
-  a.draw = function()
-
-  end
-
-  return a
 end
 
-abilities["reflect"].use = function(world,entity)
-  local a = {}
-  a.t0 = world.tick
-  a.tf = world.tick + abilities["rage"].duration * defs.TPS
-  a.id = id()
-  a.rad = math.sqrt(2*(defs.PLAYER_L/2)^2)
-  a.name = "reflect"
-
-  a.update = function()
-    if world.tick > a.tf then
-    return false
-    else
-    return true
-    end
-  end
-
-  a.draw = function()
-    local pos = world_to_screen(entity.x,entity.y)
-
-    love.graphics.setColor(1,0.2,0,0.2)
-    love.graphics.circle("fill",pos.x,pos.y,a.rad)
-  end
-
-  return a
+abilities["reflect"].use = function(world,entity,active_abil)
+  active_abil.rad = math.sqrt(2*(defs.PLAYER_L/2)^2)
 end
 
-abilities["beam"].use = function(world,entity)
+abilities["reflect"].draw = function(world,entity,active_abil)
+  local pos = world_to_screen(entity.x,entity.y)
+  love.graphics.setColor(1,0.2,0,0.2)
+  love.graphics.circle("fill",pos.x,pos.y,active_abil.rad)
+end
+
+function beam_get_endpoint(entity,active_abil)
+  local dx = entity.x - active_abil.target.x
+  local dy = entity.y - active_abil.target.y
+
+  if dx == 0 then
+    if dy < 0 then 
+      return {
+        x = entity.x,
+        y = entity.y - BIGNUM
+      }
+    else
+      return { 
+        x = entity.x,
+        y = entity.y - BIGNUM
+      }
+    end
+  else
+    local m = dy/dx
+
+    if dx < 0 then
+      return { 
+        x = entity.x + BIGNUM,
+        y = entity.y + BIGNUM * m
+      }
+    else
+      return {
+        x = entity.x - BIGNUM,
+        y = entity.y - BIGNUM * m
+      }
+    end
+  end
+end
+
+abilities["beam"].use = function(world,entity,active_abil)
   -- Get ability target
   local target = world.entities[entity.shoot_target.name]
-  if target == nil then return nil end
-
-  local a = {}
 
   -- Beam won't follow the target
-  a.target = {
+  active_abil.target = {
     x = target.x,
     y = target.y
   }
-
-  a.t0 = world.tick
-  a.last_dmg = nil
-  a.id = id()
-  a.name = "beam"
-
-  a.get_endpoint = function()
-    local dx = entity.x - a.target.x
-    local dy = entity.y - a.target.y
-
-    if dx == 0 then
-      if dy < 0 then 
-        return {
-          x = entity.x,
-          y = entity.y - BIGNUM
-        }
-      else
-        return { 
-          x = entity.x,
-          y = entity.y - BIGNUM
-        }
-      end
-    else
-      local m = dy/dx
-
-      if dx < 0 then
-        return { 
-          x = entity.x + BIGNUM,
-          y = entity.y + BIGNUM * m
-        }
-      else
-        return {
-          x = entity.x - BIGNUM,
-          y = entity.y - BIGNUM * m
-        }
-      end
-    end
-  end
-
-  -- Update
-  a.update = function()
-
-    -- Deal damage
-    if a.last_dmg == nil or world.tick > (a.last_dmg + math.floor(defs.TPS / abilities["beam"].frequency)) then
-      a.last_dmg = world.tick
-
-      local endpoint = a.get_endpoint()
-
-      -- Find the first object that the beam collides with
-      for ename,e in pairs(world.entities) do
-        if e.enemy and e.alive and line_intersects_rect(entity.x,entity.y,endpoint.x,endpoint.y,e.x-e.w/2,e.y-e.h/2,e.w,e.h) then
-          deal_damage(ename,abilities["beam"].damage)
-        end
-      end
-    end
-
-    return true
-  end
-
-  -- Draw
-  a.draw = function()
-    local endpoint = a.get_endpoint()
-    local targetpos = world_to_screen(endpoint.x,endpoint.y)
-    local entitypos = world_to_screen(entity.x,entity.y)
-
-    love.graphics.setColor(triangle(10,a.t0) * 0.5 + 0.5,triangle(10,a.t0) * 0.5 + 0.5,1)
-    love.graphics.line(entitypos.x,entitypos.y,targetpos.x,targetpos.y)
-  end
-
-  return a
+  active_abil.last_dmg = nil
 end
 
+abilities["beam"].update = function(world,entity,active_abil)
+  -- Deal damage
+  if active_abil.last_dmg == nil or world.tick > (active_abil.last_dmg + math.floor(defs.TPS / abilities["beam"].frequency)) then
+    active_abil.last_dmg = world.tick
 
+    local endpoint = beam_get_endpoint(entity,active_abil)
+
+    for ename,e in pairs(world.entities) do
+      if (e.enemy ~= entity.enemy) and e.alive and line_intersects_rect(entity.x,entity.y,endpoint.x,endpoint.y,e.x-e.w/2,e.y-e.h/2,e.w,e.h) then
+        deal_damage(ename,abilities["beam"].damage)
+      end
+    end
+  end
+
+  return true
+end
+
+abilities["beam"].draw = function(world,entity,active_abil)
+  local endpoint = beam_get_endpoint(entity,active_abil)
+  local targetpos = world_to_screen(endpoint.x,endpoint.y)
+  local entitypos = world_to_screen(entity.x,entity.y)
+
+  love.graphics.setColor(triangle(10,a.t0) * 0.5 + 0.5,triangle(10,a.t0) * 0.5 + 0.5,1)
+  love.graphics.line(entitypos.x,entitypos.y,targetpos.x,targetpos.y)
+end
 
 --> UTILS
 ----> Get screen world bounds
-function id()
-    local template ='xxxxxxxx'
-    return string.gsub(template, '[xy]', function (c)
-        local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
-        return string.format('%x', v)
-    end)
-end
+
 
 function screen_coords(x,y)
   local w = love.graphics.getWidth()
@@ -1103,7 +1044,7 @@ function draw_entity(e)
     -- Draw active abilities
     for aname,aabils in pairs(e.active_abilities) do
       for _,aabil in pairs(aabils) do
-        aabil.draw()
+        abilities.draw(world,e,aabil)
       end
     end
   end

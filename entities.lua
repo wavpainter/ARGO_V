@@ -31,11 +31,6 @@ local Entities = {
       max_hp = 200,
       move_speed = 0.75,
       abilities = {
-        ["summon"] = {
-          locked = true,
-          times_used = 0,
-          slot = 1,
-        },
         ["reflect"] = {
           locked = true,
           times_used = 0,
@@ -246,42 +241,11 @@ function entities.unlock_random(world,entity,exclude,reset_charge)
 end
 
 function entities.use_ability(world,entity,ability_name)
-  local ability_def = abilities[ability_name]
-
-  -- Lock ability
-  entity.abilities[ability_name].locked = true
-
-  -- Stationary ability
-  if ability_def.stationary then
-    entity.move_target = nil -- Stationary
-  end
-
-  -- Call use
-  local active_ability = ability_def.use(world,entity)
-  if active_ability == nil then
-    log_info("Failed to use " .. ability_name)
-    return
-  end
+  abilities.use(world,entity,ability_name)
 
   -- Unlock abilities
   if entity.charge >= defs.CHARGE_TO_UNLOCK then
     entities.unlock_random(world,entity)
-  end
-
-  -- Channel ability
-  if ability_def.channel then
-    entity.ability_channeling = active_ability
-    entity.shooting = false
-  else
-    entity.ability_channeling = nil
-  end
-
-  if active_ability ~= nil then
-    local id = active_ability.id
-    if id == nil then id = id() end
-
-    entity.active_abilities[ability_name][id] = active_ability
-    entity.abilities[ability_name].times_used = entity.abilities[ability_name].times_used + 1 -- Lua moment
   end
 end
 
@@ -318,67 +282,6 @@ function entities.update(world,entity)
 
   local pixelrange = utils.get_pixel_range(entity.range)
 
-  -- Active abilities
-  for aname,aabils in pairs(entity.active_abilities) do
-    for id,aabil in pairs(aabils) do
-      local ability_def = abilities[aname]
-      local cancel = false
-
-      -- Cancel stationary ability if entity moves
-      if ability_def.stationary then
-        if entity.move_target ~= nil then
-          cancel = true
-        end
-      end
-
-      -- Cancel channeling if entity uses another ability or shoots
-      if ability_def.channel then
-        if entity.ability_channeling ~= aabil or entity.shooting ~= false then
-          entity.ability_channeling = nil
-          cancel = true
-        end
-      end
-
-      if not cancel then
-        local active = aabil.update()
-        if not active then cancel = true end
-      end
-
-      if cancel then
-        aabils[id] = nil
-      end
-    end
-  end
-
-  -- Check channeled ability
-  if entity.ability_channeling ~= nil then
-    local chan = entity.ability_channeling
-    if entity.active_abilities[chan.name][chan.id] == nil then
-      entity.ability_channeling = nil
-    end
-  end
-
-  if entity.shooting and entity.shoot_target ~= nil then
-    local shoot_speed = entity.shoot_speed
-    if entity.active_abilities["rage"] ~= nil then
-      for _,rage in pairs(entity.active_abilities["rage"]) do
-        shoot_speed = shoot_speed * 2
-      end
-    end
-    local shoot_period = defs.TPS / shoot_speed
-
-    local target_pos = get_target_pos(entity.shoot_target)
-    if target_pos ~= nil then
-      local target_dist = utils.euclid(target_pos.x,target_pos.y,entity.x,entity.y)
-      if target_dist <= utils.get_pixel_range(entity.range) then
-        if entity.last_shoot == nil or world.tick - entity.last_shoot > shoot_period then
-          entities.shoot_bullet(world,entity)
-          entity.last_shoot = world.tick
-        end
-      end
-    end
-  end
-
   if entity.player then
     -- Discover zones
     if world.zones ~= nil then
@@ -401,12 +304,6 @@ function entities.update(world,entity)
     -- AI
     if entity.zone ~= nil and not world.zones[entity.zone].discovered then
       return
-    end
-
-    if entity.ability_channeling == nil then
-      entity.shooting = true
-    else
-      entity.shooting = false
     end
 
     -- Get summon parent
@@ -620,6 +517,41 @@ function entities.update(world,entity)
       end
 
       ::finishedabils::
+    end
+
+    if entity.ability_channeling == nil then
+      entity.shooting = true
+    else
+      entity.shooting = false
+    end
+  end
+
+  -- Active abilities
+  for aname,aabils in pairs(entity.active_abilities) do
+    for id,aabil in pairs(aabils) do
+      abilities.update(world,entity,aabil)
+    end
+  end
+
+  -- Entity shoot
+  if entity.shooting and entity.shoot_target ~= nil then
+    local shoot_speed = entity.shoot_speed
+    if entity.active_abilities["rage"] ~= nil then
+      for _,rage in pairs(entity.active_abilities["rage"]) do
+        shoot_speed = shoot_speed * 2
+      end
+    end
+    local shoot_period = defs.TPS / shoot_speed
+
+    local target_pos = get_target_pos(entity.shoot_target)
+    if target_pos ~= nil then
+      local target_dist = utils.euclid(target_pos.x,target_pos.y,entity.x,entity.y)
+      if target_dist <= utils.get_pixel_range(entity.range) then
+        if entity.last_shoot == nil or world.tick - entity.last_shoot > shoot_period then
+          entities.shoot_bullet(world,entity)
+          entity.last_shoot = world.tick
+        end
+      end
     end
   end
 

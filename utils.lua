@@ -51,4 +51,12 @@ function utils.new_pos(x1,y1,x2,y2,speed)
     end
 end
 
+function utils.id()
+    local template ='xxxxxxxx'
+    return string.gsub(template, '[xy]', function (c)
+        local v = (c == 'x') and math.random(0, 0xf) or math.random(8, 0xb)
+        return string.format('%x', v)
+    end)
+end
+
 return utils
