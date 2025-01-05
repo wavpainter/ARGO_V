@@ -1619,6 +1619,8 @@ function get_world_deets()
       world_objs[layername][name] = {
         sprite = o.sprite,
         isa = o.isa,
+        condition = o.condition,
+        failmsg = o.failmsg,
         x = o.x,
         y = o.y,
         w = o.w,
@@ -1690,6 +1692,8 @@ function world_load(world_deets)
         new_world_objs[layername][name] = {
           sprite = o.sprite,
           isa = o.isa,
+          condition = o.condition,
+          failmsg = o.failmsg,
           x = o.x,
           y = o.y,
           w = o.w,
