@@ -106,11 +106,16 @@ local Images = {
   ["floor"] = "floor.jpg",
   ["smallrobot"] = "smallrobot.png",
   ["bigbot"] = "bigbot.png",
-  ["knight"] = "knight.png"
+  ["knight"] = "knight.png",
+  ["horizontaldoor"] = "horizontaldoor.png",
+  ["verticaldoor"] = "verticaldoor.png"
 }
 
 local Objects = {
   ["lectern"] = {
+    interactable = "true"
+  },
+  ["door"] = {
     interactable = "true"
   }
 }
