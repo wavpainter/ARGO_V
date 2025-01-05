@@ -130,7 +130,6 @@ function entities.create_enemy(type,sprite,visible,zone,x,y,w,h,name)
 end
 
 function entities.create(type,sprite,visible,zone,x,y,w,h,abils,name)
-  if type == nil then type = "point" end
   local etype = Entities[type]
 
   local entity_drops = {}

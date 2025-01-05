@@ -1698,8 +1698,8 @@ function world_load(world_deets)
       new_world_entities[ename] = entities.create_enemy(edef.type,edef.sprite,edef.visible,edef.zone,edef.x,edef.y,edef.w,edef.h,ename)
     end
   end
-  new_world_entities["spawn"] = entities.create(nil,nil,false,nil,0,0,1,1,nil,"spawn")
-  new_world_entities["spawn"].ephemeral = true
+  new_world_entities["void"] = entities.create("point",nil,false,nil,world_deets.spawn.x,world_deets.spawn.y,1,1,nil,"void")
+  new_world_entities["void"].ephemeral = true
 
   local new_world_zones = {}
   if world_deets.zones ~= nil then
@@ -1860,7 +1860,7 @@ function game_update()
   world_update()
 
   if world.entities[curr_entity] == nil then
-    curr_entity = "spawn"
+    curr_entity = "void"
   end
 end
 
