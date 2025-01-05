@@ -1398,6 +1398,25 @@ function create_hit_particle(damage,x,y,h)
   })
 end
 
+----> Create ability use particle
+function create_ability_particle(aname,x,y,h)
+  local t0 = love.timer.getTime()
+  table.insert(particles,{
+    sprite = aname,
+    size = 20,
+    x = x,
+    y = y,
+    should_destroy = function(p)
+      p.y = p.y + ((y - h) - p.y) / 16
+      if love.timer.getTime() - t0 > 0.7 then
+        return true
+      else
+        return false
+      end
+    end
+  })
+end
+
 ----> Deal entity damage
 function deal_damage(ename,dmg,interrupt)
   if interrupt == nil then interrupt = false end
@@ -1410,8 +1429,8 @@ function deal_damage(ename,dmg,interrupt)
 
   ent.hp = ent.hp - dmg
 
-  create_hit_particle(dmg,ent.x,ent.y,ent.h/2 + 20)
-  
+  table.insert(world.new_particles,"hit " .. tostring(dmg) .. " " .. tostring(ent.x) .. " " .. tostring(ent.y) .. " " .. tostring(ent.h/2 + 20))
+
   -- Die
   if ent.hp <= 0 then
     if ent.drops ~= nil then
@@ -1490,7 +1509,7 @@ end
 function world_update()
   if world ~= nil then
     world.tick = world.tick + 1
-    world_dbg_tick = world.tick
+    world.new_particles = {}
     
     for ename,entity in pairs(world.entities) do
       -- Open ability book
@@ -1680,7 +1699,8 @@ function world_load(world_deets)
     players = {},
     objects = new_world_objs,
     entities = new_world_entities,
-    bullets = {}
+    bullets = {},
+    new_particles = {}
   }
   
   world = new_world
@@ -1784,10 +1804,24 @@ function game_update()
     ui_add_game()
   end
   
-  --if clicking and t - last_move_s > MOVE_DELAY_S then
-  --  move_char()
-  --end
-  
+  -- Draw particles
+  for i,p in pairs(world.new_particles) do
+    local particle_parts = split_spaces(p)
+    if particle_parts[1] == "hit" then
+      local dmg = tonumber(particle_parts[2])
+      local x = tonumber(particle_parts[3])
+      local y = tonumber(particle_parts[4])
+      local h = tonumber(particle_parts[5])
+      create_hit_particle(dmg,x,y,h)
+    elseif particle_parts[1] == "ability" then
+      local aname = particle_parts[2]
+      local x = tonumber(particle_parts[3])
+      local y = tonumber(particle_parts[4])
+      local h = tonumber(particle_parts[5])
+      create_ability_particle(aname,x,y,h)
+    end
+  end
+
   world_update()
 end
 
@@ -1804,6 +1838,18 @@ function game_draw_particles()
 
       love.graphics.setColor(part.color)
       love.graphics.print(part.text,pos.x - tw/2,pos.y - th/2)
+
+      if part.should_destroy(part) then
+        particles[i] = nil
+      end
+    elseif part.sprite ~= nil then
+      local img = get_image(part.sprite)
+      local pos = world_to_screen(part.x,part.y)
+      local xscale = UI_ABILITY_ICON_LEN / img.w
+      local yscale = UI_ABILITY_ICON_LEN / img.h
+
+      love.graphics.setColor(1,1,1,1)
+      love.graphics.draw(img.img,pos.x-UI_ABILITY_ICON_LEN/2,pos.y-UI_ABILITY_ICON_LEN/2,0,xscale,yscale)
 
       if part.should_destroy(part) then
         particles[i] = nil

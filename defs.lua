@@ -20,6 +20,5 @@ defs.PLAYER_L = 75
 defs.TPS = 60
 defs.CHARGE_TO_UNLOCK = 8
 defs.MAX_UNLOCKED = 3
-defs.PLAYER_L = 75
 
 return defs

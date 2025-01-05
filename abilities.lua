@@ -172,6 +172,7 @@ abilities.use = function(world,entity,aname)
 
     if abilities[aname].use ~= nil then
         abilities[aname].use(world,entity,active_abil)
+        table.insert(world.new_particles,"ability " .. aname .. " " .. tostring(entity.x) .. " " .. tostring(entity.y) .. " " .. tostring(entity.h/2 + 20))
     end
 
     -- Channel ability
