@@ -31,7 +31,7 @@ local Entities = {
       max_hp = 200,
       move_speed = 0.75,
       abilities = {
-        ["reflect"] = {
+        ["summon"] = {
           locked = true,
           times_used = 0,
           slot = 2
@@ -79,8 +79,16 @@ local Entities = {
       shoot_speed = 2,
       damage = 10,
       range = 0.8,
-      max_hp = 200,
+      max_hp = 20,
       move_speed = 0.9,
+    },
+    ["knight"] = {
+      targetable = true,
+      shoot_speed = 1,
+      damage = 50,
+      range = 0.2,
+      max_hp = 150,
+      move_speed = 0.7
     },
     ["player"] = {
       shoot_speed = 4,

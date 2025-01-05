@@ -57,9 +57,6 @@ local abilities = {
         channel = false,
         stationary = false,
         duration = 20,
-        shoot_speed = 2,
-        range = 1,
-        damage = 10,
         class = defs.AbilityClass.OFFENSE
     },
     ["rage"] = {
@@ -118,18 +115,15 @@ local abilities = {
         damage = 1000,
         class = defs.AbilityClass.SHORT
     },
-    ["summon2"] = {
+    ["knight"] = {
         index = 12,
-        name = "Summon2",
+        name = "Summon Knight",
         description = "",
         interrupt = false,
         target = false,
         channel = false,
         stationary = false,
         duration = 20,
-        shoot_speed = 2,
-        range = 1,
-        damage = 10,
         class = defs.AbilityClass.OFFENSE
     },
     ["summon3"] = {
@@ -172,7 +166,7 @@ abilities.use = function(world,entity,aname)
 
     if abilities[aname].use ~= nil then
         abilities[aname].use(world,entity,active_abil)
-        table.insert(world.new_particles,"ability " .. aname .. " " .. tostring(entity.x) .. " " .. tostring(entity.y) .. " " .. tostring(entity.h/2 + 20))
+        table.insert(world.new_particles,"ability " .. aname .. " " .. tostring(entity.x) .. " " .. tostring(entity.y - entity.h/2) .. " " .. tostring(0))
     end
 
     -- Channel ability

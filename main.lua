@@ -105,7 +105,8 @@ local Images = {
   ["ceiling"] = "ceiling.jpg",
   ["floor"] = "floor.jpg",
   ["smallrobot"] = "smallrobot.png",
-  ["bigbot"] = "bigbot.png"
+  ["bigbot"] = "bigbot.png",
+  ["knight"] = "knight.png"
 }
 
 local Objects = {
@@ -184,6 +185,11 @@ local DEFAULT_PLAYER = {
       locked = true,
       times_used = 0,
       slot = 1,
+    },
+    ["knight"] = {
+      locked = true,
+      times_used = 0,
+      slot = 2
     }
     
   },
@@ -273,6 +279,12 @@ end
 abilities["summon"].use = function(world,entity,active_abil)
   local summon_name = "summon." .. active_abil.id
   local entity = entities.create_summon("cat","summon",entity.x,entity.y,defs.PLAYER_L,defs.PLAYER_L,summon_name,entity.name,"summon",entity.enemy)
+  world.entities[summon_name] = entity
+end
+
+abilities["knight"].use = function(world,entity,active_abil)
+  local summon_name = "knight." .. active_abil.id
+  local entity = entities.create_summon("knight","knight",entity.x,entity.y,defs.PLAYER_L,defs.PLAYER_L,summon_name,entity.name,"knight",entity.enemy)
   world.entities[summon_name] = entity
 end
 
@@ -1403,7 +1415,6 @@ function create_ability_particle(aname,x,y,h)
   local t0 = love.timer.getTime()
   table.insert(particles,{
     sprite = aname,
-    size = 20,
     x = x,
     y = y,
     should_destroy = function(p)
@@ -1843,16 +1854,17 @@ function game_draw_particles()
         particles[i] = nil
       end
     elseif part.sprite ~= nil then
+      local l = UI_ABILITY_LEN / 2
       local img = get_image(part.sprite)
       local pos = world_to_screen(part.x,part.y)
-      local xscale = UI_ABILITY_ICON_LEN / img.w
-      local yscale = UI_ABILITY_ICON_LEN / img.h
+      local xscale = l / img.w
+      local yscale = l / img.h
 
       love.graphics.setColor(1,1,1,1)
-      love.graphics.draw(img.img,pos.x-UI_ABILITY_ICON_LEN/2,pos.y-UI_ABILITY_ICON_LEN/2,0,xscale,yscale)
+      love.graphics.draw(img.img,pos.x-l/2,pos.y-l/2,0,xscale,yscale)
 
-      love.graphics.setColor(0,0,1,1)
-      love.graphics.rectangle("line",pos.x-UI_ABILITY_ICON_LEN/2,pos.y-UI_ABILITY_ICON_LEN/2,UI_ABILITY_ICON_LEN,UI_ABILITY_ICON_LEN)
+      love.graphics.setColor(0,1,0,1)
+      love.graphics.rectangle("line",pos.x-l/2,pos.y-l/2,l,l)
 
       if part.should_destroy(part) then
         particles[i] = nil
