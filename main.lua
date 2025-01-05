@@ -1851,6 +1851,9 @@ function game_draw_particles()
       love.graphics.setColor(1,1,1,1)
       love.graphics.draw(img.img,pos.x-UI_ABILITY_ICON_LEN/2,pos.y-UI_ABILITY_ICON_LEN/2,0,xscale,yscale)
 
+      love.graphics.setColor(0,0,1,1)
+      love.graphics.rectangle("line",pos.x-UI_ABILITY_ICON_LEN/2,pos.y-UI_ABILITY_ICON_LEN/2,UI_ABILITY_ICON_LEN,UI_ABILITY_ICON_LEN)
+
       if part.should_destroy(part) then
         particles[i] = nil
       end
@@ -2445,6 +2448,7 @@ function ui_mousehandler_abilities_book(x,y,button,pressed)
         -- Less than 10 abilities (edge case)
         ability_map[selected_ability_def.slot] = nil
         selected_ability_def.slot = i
+        selected_ability_def.locked = true
         ability_map[i] = uidef.selected
       else
         local prev_slot = prev_ability_def.slot
