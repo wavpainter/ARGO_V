@@ -324,7 +324,7 @@ function entities.update(world,entity)
     if entity.summon then
       summon_parent = world.entities[entity.parent]
       local parent_ability = entity.parent_ability
-      if summon_parent == nil then
+      if summon_parent == nil or not summon_parent.alive then
         entity.alive = false
         return
       end
