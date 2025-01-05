@@ -70,7 +70,6 @@ local AbilityKey = {
 local BIGNUM = 1000000
 local DEFAULT_USERNAME = "jason"
 local MOVE_DELAY_S = 0.15
-local PLAYER_L = 75
 local DROP_L = 40
 
 local BULLET_SPEED = 1500
@@ -250,6 +249,7 @@ abilities["rage"].use = function(world,entity)
   a.t0 = world.tick
   a.tf = world.tick + abilities["rage"].duration * defs.TPS
   a.id = id()
+  a.name = "rage"
 
   a.update = function()
     if world.tick > a.tf then
@@ -275,7 +275,7 @@ abilities["summon"].use = function(world,entity)
   a.t0 = world.tick
   a.tf = world.tick + abilities["summon"].duration * defs.TPS
   a.id = id()
-  a.following = false
+  a.name = "summon"
 
   local summon_name = "summon." .. a.id
 
@@ -304,6 +304,7 @@ abilities["reflect"].use = function(world,entity)
   a.tf = world.tick + abilities["rage"].duration * defs.TPS
   a.id = id()
   a.rad = math.sqrt(2*(defs.PLAYER_L/2)^2)
+  a.name = "reflect"
 
   a.update = function()
     if world.tick > a.tf then
@@ -339,6 +340,7 @@ abilities["beam"].use = function(world,entity)
   a.t0 = world.tick
   a.last_dmg = nil
   a.id = id()
+  a.name = "beam"
 
   a.get_endpoint = function()
     local dx = entity.x - a.target.x
@@ -1140,7 +1142,7 @@ function world_draw()
     if player_entity.move_target ~= nil then
       local tpos = world_to_screen(player_entity.move_target.x,player_entity.move_target.y)
       love.graphics.setColor(0,1,0)
-      love.graphics.circle("fill",tpos.x,tpos.y,PLAYER_L/8)
+      love.graphics.circle("fill",tpos.x,tpos.y,defs.PLAYER_L/8)
     end
 
     for _,loot in pairs(player_entity.player_loot) do
@@ -1163,10 +1165,10 @@ function world_draw()
       if et ~= nil and et.alive then
         local tp = world_to_screen(et.x,et.y)
         local img = get_image("target")
-        local xscale = PLAYER_L / img.w / 2
-        local yscale = PLAYER_L / img.h / 2
+        local xscale = defs.PLAYER_L / img.w / 2
+        local yscale = defs.PLAYER_L / img.h / 2
         love.graphics.setColor(1,1,1)
-        love.graphics.draw(img.img,tp.x - PLAYER_L / 4, tp.y - PLAYER_L / 4,0,xscale,yscale)
+        love.graphics.draw(img.img,tp.x - defs.PLAYER_L / 4, tp.y - defs.PLAYER_L / 4,0,xscale,yscale)
       end
     end
   end
@@ -1420,7 +1422,7 @@ end
 ----> Player uses ability
 function use_ability(entity_name,ability_num)
   local entity = world.entities[entity_name]
-  if world ~= nil and entity ~= nil then
+  if world ~= nil and entity ~= nil and entity.ability_map[ability_num] ~= nil then
     local ability_name = entity.ability_map[ability_num]
     if not entities.can_use_ability(world,entity,ability_name) then
       log_info("Can't use" .. ability_name)
@@ -1550,7 +1552,7 @@ function world_update()
     world_dbg_tick = world.tick
     
     for ename,entity in pairs(world.entities) do
-      -- update player
+      -- Open ability book
       if entity.name == curr_entity then
         -- View
         if entity.player_ability_book_open and ui["abilities_book"] ~= nil then
@@ -1560,65 +1562,8 @@ function world_update()
         end
       end
 
-      if not entity.alive then
-        goto continue
-      end
-
-      if entity.zone ~= nil and not world.zones[entity.zone].discovered then
-        goto continue
-      end
-
       -- Update entity
       entities.update(world,entity)
-
-      -- Check minion ability is still active
-      if entity.summon then
-        local parent_name = entity.parent
-        local parent_ability = entity.parent_ability
-        local name_parts = split_delim(entity.name,".")
-        local id = name_parts[2]
-
-        local active = false
-
-        local parent = world.entities[parent_name]
-        if parent ~= nil and parent.active_abilities[parent_ability] ~= nil and parent.active_abilities[parent_ability][id] ~= nil then
-          active = true
-        end
-
-        if not active then
-          entity.alive = false
-          goto continue
-        end
-      end
-
-      -- Entity move
-      if entity.move_target ~= nil then
-        local new_pos = utils.new_pos(entity.x,entity.y,entity.move_target.x,entity.move_target.y,defs.MOVE_SPEED * entity.move_speed)
-        adjust_pos_for_collisions(new_pos,PLAYER_L,PLAYER_L)
-        
-        entity.x = new_pos.x
-        entity.y = new_pos.y
-        if new_pos.arrived then
-          entity.move_target = nil
-        end
-      end
-
-      -- Entity shoot
-      if entity.shoot_target ~= nil and entity.shooting then
-        local shoot_speed = entity.shoot_speed
-        local shoot_period = defs.TPS / shoot_speed
-
-        local target_pos = get_target_pos(entity.shoot_target)
-        if target_pos ~= nil then
-          local target_dist = utils.euclid(entity.x,entity.y,target_pos.x,target_pos.y)
-          if target_dist <= utils.get_pixel_range(entity.range) then
-            if entity.last_shoot == nil or world.tick - entity.last_shoot > shoot_period then
-              entities.shoot_bullet(world,entity)
-              entity.last_shoot = world.tick
-            end
-          end
-        end
-      end
 
       ::continue::
     end
@@ -1805,7 +1750,7 @@ function world_join(username)
   log_info(username .. " joined!")
   curr_entity = "player."..username
 
-  local new_entity = entities.create_player(DEFAULT_PLAYER.avatar,world.spawn.x,world.spawn.y,PLAYER_L,PLAYER_L,DEFAULT_PLAYER.abilities,curr_entity)
+  local new_entity = entities.create_player(DEFAULT_PLAYER.avatar,world.spawn.x,world.spawn.y,defs.PLAYER_L,defs.PLAYER_L,DEFAULT_PLAYER.abilities,curr_entity)
   
   world.entities["player."..username] = new_entity
 end
@@ -1960,19 +1905,19 @@ function action()
           local objtype = Objects[obj.isa]
           if objtype.interactable then
             -- Just use the collision detection code to check the interaction
-            local side = check_collision(player.x,player.y,PLAYER_L + 2 * INTERACT_DIST,PLAYER_L + 2 * INTERACT_DIST,obj.x,obj.y,obj.w,obj.h)
+            local side = check_collision(player.x,player.y,defs.PLAYER_L + 2 * INTERACT_DIST,defs.PLAYER_L + 2 * INTERACT_DIST,obj.x,obj.y,obj.w,obj.h)
 
             if side ~= nil then
             
               local d = 0
               if side == 1 then
-                d = player.x - obj.x - PLAYER_L / 2 - obj.w / 2
+                d = player.x - obj.x - defs.PLAYER_L / 2 - obj.w / 2
               elseif side == 2 then
-                d = player.y - obj.y - PLAYER_L / 2 - obj.h / 2
+                d = player.y - obj.y - defs.PLAYER_L / 2 - obj.h / 2
               elseif side == 3 then
-                d = obj.x - player.x - PLAYER_L / 2 - obj.w / 2
+                d = obj.x - player.x - defs.PLAYER_L / 2 - obj.w / 2
               elseif side == 4 then
-                d = obj.y - player.y - PLAYER_L / 2 - obj.h / 2
+                d = obj.y - player.y - defs.PLAYER_L / 2 - obj.h / 2
               end
 
               if d < INTERACT_DIST and (closest == nil or d < dist) then
