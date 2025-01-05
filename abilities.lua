@@ -1,3 +1,5 @@
+local defs = require("defs")
+
 local Abilities = {
 ["invis"] = {
     index = 1,
@@ -7,6 +9,7 @@ local Abilities = {
     target = false,
     channel = false,
     stationary = false,
+    class = defs.AbilityClass.DEFENCE,
     use = function(world,player) return nil end
 },
 ["beam"] = {
@@ -20,6 +23,7 @@ local Abilities = {
     stationary = true,
     frequency = 10,
     damage = 10,
+    class = defs.AbilityClass.OFFENSE,
     use = function(world,player) return true end
 },
 ["cantrip"] = {
@@ -30,6 +34,7 @@ local Abilities = {
     target = false,
     channel = false,
     stationary = false,
+    class = defs.AbilityClass.OPTIMISE,
     use = function(world,player) return nil end
 },
 ["root"] = {
@@ -41,6 +46,7 @@ local Abilities = {
     range = 10,
     channel = false,
     stationary = false,
+    class = defs.AbilityClass.OFFENSE,
     use = function(world,player) return nil end
 },
 ["summon"] = {
@@ -55,6 +61,7 @@ local Abilities = {
     shoot_speed = 2,
     range = 1,
     damage = 10,
+    class = defs.AbilityClass.OFFENSE,
     use = function(world,player) return nil end
 },
 ["rage"] = {
@@ -66,6 +73,7 @@ local Abilities = {
     channel = false,
     stationary = false,
     duration = 5,
+    class = defs.AbilityClass.BURST,
     use = function(world,player) return nil end
 },
 ["reflect"] = {
@@ -74,9 +82,10 @@ local Abilities = {
     description = "",
     interrupt = false,
     target = false,
-    channel = false,
+    channel = true,
     stationary = false,
     duration = 10,
+    class = defs.AbilityClass.DEFENCE,
     use = function(world,player) return nil end
 },
 ["stun"] = {
@@ -88,6 +97,7 @@ local Abilities = {
     range = 10,
     channel = false,
     stationary = false,
+    class = defs.AbilityClass.DEFENCE,
     use = function(world,player) return nil end
 },
 ["pull"] = {
@@ -99,6 +109,7 @@ local Abilities = {
     range = 10,
     channel = false,
     stationary = true,
+    class = defs.AbilityClass.OFFENSE,
     use = function(world,player) return nil end
 },
 ["stab"] = {
@@ -111,6 +122,7 @@ local Abilities = {
     channel = false,
     stationary = false,
     damage = 1000,
+    class = defs.AbilityClass.SHORT,
     use = function(world,player) return nil end
 },
 ["summon2"] = {
@@ -125,6 +137,7 @@ local Abilities = {
     shoot_speed = 2,
     range = 1,
     damage = 10,
+    class = defs.AbilityClass.OFFENSE,
     use = function(world,player) return nil end
 },
 ["summon3"] = {
@@ -139,6 +152,7 @@ local Abilities = {
     shoot_speed = 2,
     range = 1,
     damage = 10,
+    class = defs.AbilityClass.OFFENSE,
     use = function(world,player) return nil end
 }
 }

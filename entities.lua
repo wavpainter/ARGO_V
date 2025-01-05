@@ -89,7 +89,7 @@ local Entities = {
       max_hp = defs.PLAYER_HP,
       move_speed = 1
     }
-  }
+}
 
 local entities = {}
 
