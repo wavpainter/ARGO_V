@@ -91,11 +91,16 @@ local Entities = {
       move_speed = 0.7
     },
     ["player"] = {
+      targetable = true,
       shoot_speed = 4,
       range = 1,
       damage = 10,
       max_hp = defs.PLAYER_HP,
       move_speed = 1
+    },
+    ["point"] = {
+      targetable = false,
+      max_hp = 1,
     }
 }
 
@@ -125,81 +130,82 @@ function entities.create_enemy(type,sprite,visible,zone,x,y,w,h,name)
 end
 
 function entities.create(type,sprite,visible,zone,x,y,w,h,abils,name)
-    local etype = Entities[type]
+  if type == nil then type = "point" end
+  local etype = Entities[type]
 
-    if etype == nil then return nil end
+  local entity_drops = {}
+  local entity_abils = {}
+  local entity_abilmap = {}
+  local entity_active_abils = {}
 
-    local entity_drops = {}
-    if etype.drops ~= nil then
-      for _,drop in pairs(etype.drops) do
-          table.insert(entity_drops,{
-              name = drop.name,
-              rate = drop.rate
-          })
-      end
+  if etype.drops ~= nil then
+    for _,drop in pairs(etype.drops) do
+        table.insert(entity_drops,{
+            name = drop.name,
+            rate = drop.rate
+        })
     end
+  end
 
-    local entity_abils = {}
-    local entity_abilmap = {}
-    local entity_active_abils = {}
-    if abils ~= nil then
-      for aname,abil in pairs(abils) do
-        entity_abils[aname] = {
-          locked = abil.locked,
-          times_used = abil.times_used,
-          slot = abil.slot
-        }
-        if abil.slot ~= - 1 then
-          entity_abilmap[abil.slot] = aname
-        end
 
-        entity_active_abils[aname] = {}
+  if abils ~= nil then
+    for aname,abil in pairs(abils) do
+      entity_abils[aname] = {
+        locked = abil.locked,
+        times_used = abil.times_used,
+        slot = abil.slot
+      }
+      if abil.slot ~= - 1 then
+        entity_abilmap[abil.slot] = aname
       end
+
+      entity_active_abils[aname] = {}
     end
+  end
 
-    local entity = {
-      -- Args
-        name = name,
-        sprite = sprite,
-        visible = visible == true,
-        zone = zone,
-        x = x,
-        y = y,
-        w = w,
-        h = h,
-        type = type,
-        alive = true,
-        charge = 0,
-        last_shoot = nil,
-        ability_channeling = nil,
-        shooting = false,
-        ephemeral = false,
-        -- Identity
-        player = false,
-        enemy = false,
-        summon = false,
-        -- Substructures
-        parent = nil,
-        parent_ability = nil,
-        drops = entity_drops,
-        abilities = entity_abils,
-        ability_map = entity_abilmap,
-        active_abilities = entity_active_abils,
-        -- Type def
-        targetable = etype.targetable == true,
-        shoot_speed = etype.shoot_speed,
-        damage = etype.damage,
-        range = etype.range,
-        hp = etype.max_hp,
-        max_hp = etype.max_hp,
-        move_speed = etype.move_speed,
-        -- Player
-        player_discovered_zones = {},
-        player_loot = {},
-        player_ability_book_open = false
-    }
+  local entity = {
+    -- Args
+      name = name,
+      sprite = sprite,
+      visible = visible == true,
+      zone = zone,
+      x = x,
+      y = y,
+      w = w,
+      h = h,
+      type = type,
+      alive = true,
+      charge = 0,
+      last_shoot = nil,
+      ability_channeling = nil,
+      shooting = false,
+      ephemeral = false,
+      -- Identity
+      player = false,
+      enemy = false,
+      summon = false,
+      -- Substructures
+      parent = nil,
+      parent_ability = nil,
+      drops = entity_drops,
+      abilities = entity_abils,
+      ability_map = entity_abilmap,
+      active_abilities = entity_active_abils,
+      -- Type def
+      targetable = etype.targetable == true,
+      shoot_speed = etype.shoot_speed,
+      damage = etype.damage,
+      range = etype.range,
+      hp = etype.max_hp,
+      max_hp = etype.max_hp,
+      move_speed = etype.move_speed,
+      -- Player
+      player_discovered_zones = {},
+      player_loot = {},
+      player_ability_book_open = false
+  }
 
-    return entity
+  return entity
 end
 
 ----> Have entity shoot at something
@@ -286,7 +292,7 @@ function entities.can_use_ability(world,entity,ability_name)
 end
 
 function entities.update(world,entity)
-  if not entity.alive then return end
+  if entity.type == "point" or not entity.alive then return end
 
   local pixelrange = utils.get_pixel_range(entity.range)
 
@@ -348,7 +354,7 @@ function entities.update(world,entity)
       local nearest_entity = nil
       local nearest_dist = nil
       for ename,e in pairs(world.entities) do
-        if e.alive and (e.enemy ~= entity.enemy) then
+        if e.targetable and e.alive and (e.enemy ~= entity.enemy) then
           local d = utils.euclid(e.x,e.y,entity.x,entity.y)
           if nearest_entity == nil or d < nearest_dist then
             nearest_entity = e

@@ -190,6 +190,21 @@ local DEFAULT_PLAYER = {
       locked = true,
       times_used = 0,
       slot = 2
+    },
+    ["rage"] = {
+      locked = true,
+      times_used = 0,
+      slot = 3
+    },
+    ["reflect"] = {
+      locked = true,
+      times_used = 0,
+      slot = 4
+    },
+    ["beam"] = {
+      locked = true,
+      times_used = 0,
+      slot = 5
     }
     
   },
@@ -298,9 +313,13 @@ abilities["reflect"].draw = function(world,entity,active_abil)
   love.graphics.circle("fill",pos.x,pos.y,active_abil.rad)
 end
 
-function beam_get_endpoint(entity,active_abil)
-  local dx = entity.x - active_abil.target.x
-  local dy = entity.y - active_abil.target.y
+function beam_get_endpoint(world,entity,active_abil)
+  local target = world.entities[active_abil.target]
+  
+  if target == nil or not target.alive then return nil end
+
+  local dx = entity.x - target.x
+  local dy = entity.y - target.y
 
   if dx == 0 then
     if dy < 0 then 
@@ -332,14 +351,7 @@ function beam_get_endpoint(entity,active_abil)
 end
 
 abilities["beam"].use = function(world,entity,active_abil)
-  -- Get ability target
-  local target = world.entities[entity.shoot_target.name]
-
-  -- Beam won't follow the target
-  active_abil.target = {
-    x = target.x,
-    y = target.y
-  }
+  active_abil.target = entity.shoot_target
   active_abil.last_dmg = nil
 end
 
@@ -348,10 +360,11 @@ abilities["beam"].update = function(world,entity,active_abil)
   if active_abil.last_dmg == nil or world.tick > (active_abil.last_dmg + math.floor(defs.TPS / abilities["beam"].frequency)) then
     active_abil.last_dmg = world.tick
 
-    local endpoint = beam_get_endpoint(entity,active_abil)
+    local endpoint = beam_get_endpoint(world,entity,active_abil)
+    if endpoint == nil then return false end
 
     for ename,e in pairs(world.entities) do
-      if (e.enemy ~= entity.enemy) and e.alive and line_intersects_rect(entity.x,entity.y,endpoint.x,endpoint.y,e.x-e.w/2,e.y-e.h/2,e.w,e.h) then
+      if (e.enemy ~= entity.enemy) and e.alive and e.targetable and line_intersects_rect(entity.x,entity.y,endpoint.x,endpoint.y,e.x-e.w/2,e.y-e.h/2,e.w,e.h) then
         deal_damage(ename,abilities["beam"].damage)
       end
     end
@@ -361,11 +374,13 @@ abilities["beam"].update = function(world,entity,active_abil)
 end
 
 abilities["beam"].draw = function(world,entity,active_abil)
-  local endpoint = beam_get_endpoint(entity,active_abil)
+  local endpoint = beam_get_endpoint(world,entity,active_abil)
+
+  if endpoint == nil then return end
   local targetpos = world_to_screen(endpoint.x,endpoint.y)
   local entitypos = world_to_screen(entity.x,entity.y)
 
-  love.graphics.setColor(triangle(10,a.t0) * 0.5 + 0.5,triangle(10,a.t0) * 0.5 + 0.5,1)
+  love.graphics.setColor(triangle(10,active_abil.t0) * 0.5 + 0.5,triangle(10,active_abil.t0) * 0.5 + 0.5,1)
   love.graphics.line(entitypos.x,entitypos.y,targetpos.x,targetpos.y)
 end
 
@@ -1576,6 +1591,13 @@ function world_update()
 
       ::continue::
     end
+
+    -- Clean up entities
+    for ename,e in pairs(world.entities) do
+      if not e.alive then
+        world.entities[ename] = nil
+      end
+    end
   end
 end
 
@@ -1676,6 +1698,8 @@ function world_load(world_deets)
       new_world_entities[ename] = entities.create_enemy(edef.type,edef.sprite,edef.visible,edef.zone,edef.x,edef.y,edef.w,edef.h,ename)
     end
   end
+  new_world_entities["spawn"] = entities.create(nil,nil,false,nil,0,0,1,1,nil,"spawn")
+  new_world_entities["spawn"].ephemeral = true
 
   local new_world_zones = {}
   if world_deets.zones ~= nil then
@@ -1834,6 +1858,10 @@ function game_update()
   end
 
   world_update()
+
+  if world.entities[curr_entity] == nil then
+    curr_entity = "spawn"
+  end
 end
 
 ----> Draw particles
