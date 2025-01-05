@@ -1145,12 +1145,14 @@ function world_draw()
   for _,bullet in pairs(bullets) do
     local bpos = world_to_screen(bullet.x,bullet.y)
     local bullet_target = world.entities[bullet.target]
-    if not bullet_target.enemy then
-      love.graphics.setColor(1,0,0)
-    else
-      love.graphics.setColor(0,0,1)
+    if bullet_target ~= nil then
+      if not bullet_target.enemy then
+        love.graphics.setColor(1,0,0)
+      else
+        love.graphics.setColor(0,0,1)
+      end
+      love.graphics.circle("fill",bpos.x,bpos.y,BULLET_RADIUS)
     end
-    love.graphics.circle("fill",bpos.x,bpos.y,BULLET_RADIUS)
   end
 
   world_draw_objects("above")
