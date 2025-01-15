@@ -212,7 +212,9 @@ function entities.shoot_bullet(world,entity)
   if entity == nil then return false end
 
   if entity.shoot_target ~= nil then
+    local id = utils.id()
     local new_bullet = {
+      id = id,
       source = entity.name,
       x = entity.x,
       y = entity.y,
@@ -220,7 +222,7 @@ function entities.shoot_bullet(world,entity)
       target = entity.shoot_target
     }
 
-    table.insert(world.bullets,new_bullet)
+    world.bullets[id] = new_bullet
   end
 end
 

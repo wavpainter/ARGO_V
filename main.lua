@@ -251,7 +251,10 @@ local loaded_images = nil
 
 ----> World
 local t_accum = 0
+local k = 0
 local world = nil
+local prev_entities_pos = nil
+local prev_bullets_pos = nil
 local curr_entity = nil
 local world_dbg_showfog = nil
 
@@ -314,7 +317,8 @@ abilities["reflect"].use = function(world,entity,active_abil)
 end
 
 abilities["reflect"].draw = function(world,entity,active_abil)
-  local pos = world_to_screen(entity.x,entity.y)
+  local sp = get_entity_smooth_pos(entity)
+  local pos = world_to_screen(sp.x,sp.y)
   love.graphics.setColor(1,0.2,0,0.2)
   love.graphics.circle("fill",pos.x,pos.y,active_abil.rad)
 end
@@ -382,9 +386,11 @@ end
 abilities["beam"].draw = function(world,entity,active_abil)
   local endpoint = beam_get_endpoint(world,entity,active_abil)
 
+  local sp = get_entity_smooth_pos(entity)
+
   if endpoint == nil then return end
   local targetpos = world_to_screen(endpoint.x,endpoint.y)
-  local entitypos = world_to_screen(entity.x,entity.y)
+  local entitypos = world_to_screen(sp.x,sp.y)
 
   love.graphics.setColor(triangle(10,active_abil.t0) * 0.5 + 0.5,triangle(10,active_abil.t0) * 0.5 + 0.5,1)
   love.graphics.line(entitypos.x,entitypos.y,targetpos.x,targetpos.y)
@@ -1062,7 +1068,8 @@ end
 function draw_entity(e)
   if e.visible and e.alive then
     -- Entity image
-    local pos = world_to_screen(e.x,e.y)
+    local sp = get_entity_smooth_pos(e)
+    local pos = world_to_screen(sp.x,sp.y)
     local img = get_image(e.sprite)
     local xscale = e.w / img.w
     local yscale = e.h / img.h
@@ -1090,8 +1097,47 @@ function draw_entity(e)
       end
     end
   end
+end
 
-  
+function get_entity_smooth_pos(e)
+  local prev_pos = prev_entities_pos[e.name]
+  if k == nil or prev_pos == nil then
+    return {
+      x = e.x,
+      y = e.y
+    }
+  else
+    return {
+      x = k * e.x + (1 - k) * prev_pos.x,
+      y = k * e.y + (1 - k) * prev_pos.y
+    }
+  end
+
+end
+
+function get_bullet_smooth_pos(b,k)
+  local prev_pos = prev_bullets_pos[b.id]
+  if prev_pos == nil then
+    local source = world.entities[b.source]
+    if source ~= nil then
+      prev_pos = {
+        x = source.x,
+        y = source.y
+      }
+    end
+  end
+
+  if k == nil or prev_pos == nil then
+    return {
+      x = b.x,
+      y = b.y
+    }
+  else
+    return {
+      x = k * b.x + (1 - k) * prev_pos.x,
+      y = k * b.y + (1 - k) * prev_pos.y
+    }
+  end
 end
 
 ----> Draw
@@ -1100,7 +1146,8 @@ function world_draw()
   local bg = world.background
   
   if bg ~= nil then
-    draw_background(bg,player.x - OFFSET_X,player.y - OFFSET_Y)
+    local sp = get_entity_smooth_pos(player)
+    draw_background(bg,sp.x - OFFSET_X,sp.y - OFFSET_Y)
   end
 
   world_draw_objects("below")
@@ -1146,7 +1193,8 @@ function world_draw()
     if player_entity.shoot_target ~= nil then
       local et = world.entities[player_entity.shoot_target]
       if et ~= nil and et.alive then
-        local tp = world_to_screen(et.x,et.y)
+        local sp = get_entity_smooth_pos(et)
+        local tp = world_to_screen(sp.x,sp.y)
         local img = get_image("target")
         local xscale = defs.PLAYER_L / img.w / 2
         local yscale = defs.PLAYER_L / img.h / 2
@@ -1157,8 +1205,9 @@ function world_draw()
   end
 
   local bullets = world.bullets
-  for _,bullet in pairs(bullets) do
-    local bpos = world_to_screen(bullet.x,bullet.y)
+  for id,bullet in pairs(bullets) do
+    local sp = get_bullet_smooth_pos(bullet,k)
+    local bpos = world_to_screen(sp.x,sp.y)
     local bullet_target = world.entities[bullet.target]
     if bullet_target ~= nil then
       if not bullet_target.enemy then
@@ -1204,7 +1253,8 @@ function world_draw()
     love.graphics.setBlendMode("alpha")
     love.graphics.setColor(1,0,0,1)
     if world.fog ~= nil then
-      draw_background(world.fog,player.x - OFFSET_X,player.y - OFFSET_Y)
+      local sp = get_entity_smooth_pos(player)
+      draw_background(world.fog,sp.x - OFFSET_X,sp.y - OFFSET_Y)
     end
 
     -- Apply mask
@@ -1572,17 +1622,17 @@ function world_update()
     end
 
     local bullets = world.bullets
-    for i,bullet in pairs(bullets) do
+    for id,bullet in pairs(bullets) do
       local source = world.entities[bullet.source]
       local target = world.entities[bullet.target]
 
       if source == nil or not source.alive or target == nil or not target.alive then
-        bullets[i] = nil
+        bullets[id] = nil
       else
         local p = utils.new_pos(bullet.x,bullet.y,target.x,target.y,BULLET_SPEED)
         local collisions = check_all_collisions(p.x,p.y,BULLET_RADIUS * 1.4, BULLET_RADIUS * 1.4)
         for _,collision in pairs(collisions) do
-          bullets[i] = nil
+          bullets[id] = nil
           goto continue
         end
 
@@ -1598,10 +1648,12 @@ function world_update()
           end
 
           if has_reflect then
+            local prev_target = bullet.target
             bullet.target = bullet.source
+            bullet.source = prev_target
           else
             resolve_bullet(bullet)
-            bullets[i] = nil
+            bullets[id] = nil
           end
         end
       end
@@ -1810,7 +1862,8 @@ function screen_to_world(x,y)
   end
   
   local player = world.entities[curr_entity]
-  local sc = screen_coords(player.x,player.y)
+  local sp = get_entity_smooth_pos(player)
+  local sc = screen_coords(sp.x,sp.y)
   
   return {
     x = x + sc.x1 - OFFSET_X,
@@ -1825,7 +1878,8 @@ function world_to_screen(x,y)
   end
   
   local player = world.entities[curr_entity]
-  local sc = screen_coords(player.x,player.y)
+  local sp = get_entity_smooth_pos(player)
+  local sc = screen_coords(sp.x,sp.y)
   
   return {
     x = x - sc.x1 + OFFSET_X,
@@ -1840,6 +1894,9 @@ function game_init()
   game_keyhandlers = {}
   game_dbg_pos = nil
   particles = {}
+
+  prev_entities_pos = {}
+  prev_bullets_pos = {}
 end
 
 ----> Move
@@ -1851,6 +1908,27 @@ function move_char()
     x = new_pos.x,
     y = new_pos.y
   }
+end
+
+function save_positions()
+  if world then
+    prev_entities_pos = {}
+    prev_bullets_pos = {}
+
+    for ename,e in pairs(world.entities) do
+      prev_entities_pos[ename] = {
+        x = e.x,
+        y = e.y
+      }
+    end
+
+    for id,bullet in pairs(world.bullets) do
+      prev_bullets_pos[id] = {
+        x = bullet.x,
+        y = bullet.y
+      }
+    end
+  end
 end
 
 ----> Update
@@ -1884,6 +1962,7 @@ function game_update()
       end
     end
 
+    save_positions()
 
     world_update()
 
@@ -1935,6 +2014,7 @@ end
 ----> Draw
 function game_draw()
   if world ~= nil and world.entities[curr_entity] ~= nil then
+    k = t_accum / defs.TIMESTEP
     world_draw()
     game_draw_particles()
   else
