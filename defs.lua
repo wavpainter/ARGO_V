@@ -18,6 +18,7 @@ defs.AbilityClass = {
 defs.PLAYER_HP = 1000
 defs.PLAYER_L = 75
 defs.TPS = 60
+defs.TIMESTEP = 1 / defs.TPS
 defs.CHARGE_TO_UNLOCK = 8
 defs.MAX_UNLOCKED = 3
 

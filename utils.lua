@@ -34,15 +34,14 @@ end
 function utils.new_pos(x1,y1,x2,y2,speed)
     local target_dist = math.sqrt((x2 - x1) ^ 2 + (y2 - y1) ^ 2)
     local t_remain = target_dist / speed
-    local dt = love.timer.getDelta()
-    if t_remain <= dt then
+    if t_remain <= defs.TIMESTEP then
         return {
         arrived = true,
         x = x2,
         y = y2,
         }
     else
-        local scale = dt / t_remain
+        local scale = defs.TIMESTEP / t_remain
         return {
         arrived = false,
         x = x1 + (x2 - x1) * scale,

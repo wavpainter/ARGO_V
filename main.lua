@@ -250,6 +250,7 @@ local loaded_images = nil
 ----> Menu
 
 ----> World
+local t_accum = 0
 local world = nil
 local curr_entity = nil
 local world_dbg_showfog = nil
@@ -836,6 +837,15 @@ function debug_draw()
   -- Fade background
   love.graphics.setColor(0,0,0,0.7)
   love.graphics.rectangle("fill",0,0,w,h)
+
+  -- Framerate
+  love.graphics.setColor(1,1,1,1)
+  love.graphics.print("Current FPS: "..tostring(love.timer.getFPS( )), 10, 10)
+
+  -- World tick
+  if world then
+    love.graphics.print("World tick: " .. tostring(world.tick),10,40)
+  end
 
   -- Logs
   local y = h - 3 * lh
@@ -1748,6 +1758,7 @@ function world_load(world_deets)
     bullets = {},
     new_particles = {}
   }
+  t_accum = 0
   
   world = new_world
 end
@@ -1850,28 +1861,34 @@ function game_update()
     ui_add_game()
   end
   
-  -- Draw particles
-  for i,p in pairs(world.new_particles) do
-    local particle_parts = split_spaces(p)
-    if particle_parts[1] == "hit" then
-      local dmg = tonumber(particle_parts[2])
-      local x = tonumber(particle_parts[3])
-      local y = tonumber(particle_parts[4])
-      local h = tonumber(particle_parts[5])
-      create_hit_particle(dmg,x,y,h)
-    elseif particle_parts[1] == "ability" then
-      local aname = particle_parts[2]
-      local x = tonumber(particle_parts[3])
-      local y = tonumber(particle_parts[4])
-      local h = tonumber(particle_parts[5])
-      create_ability_particle(aname,x,y,h)
+  -- If timestep has passed, step simulation
+  t_accum = t_accum + love.timer.getDelta()
+  if t_accum > defs.TIMESTEP then
+    t_accum = t_accum - defs.TIMESTEP
+
+    -- Draw particles
+    for i,p in pairs(world.new_particles) do
+      local particle_parts = split_spaces(p)
+      if particle_parts[1] == "hit" then
+        local dmg = tonumber(particle_parts[2])
+        local x = tonumber(particle_parts[3])
+        local y = tonumber(particle_parts[4])
+        local h = tonumber(particle_parts[5])
+        create_hit_particle(dmg,x,y,h)
+      elseif particle_parts[1] == "ability" then
+        local aname = particle_parts[2]
+        local x = tonumber(particle_parts[3])
+        local y = tonumber(particle_parts[4])
+        local h = tonumber(particle_parts[5])
+        create_ability_particle(aname,x,y,h)
+      end
     end
-  end
 
-  world_update()
+    world_update()
 
-  if world.entities[curr_entity] == nil then
-    curr_entity = "void"
+    if world.entities[curr_entity] == nil then
+      curr_entity = "void"
+    end
   end
 end
 
@@ -2605,6 +2622,8 @@ end
 function love.load()
   logging.init()
   log_info("|    ARGO V    |")
+
+  love.window.setVSync( 0 )
 
   state_init()
   debug_init()
