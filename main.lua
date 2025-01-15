@@ -1704,6 +1704,7 @@ function world_load(world_deets)
           isa = o.isa,
           condition = o.condition,
           failmsg = o.failmsg,
+          activated = false,
           x = o.x,
           y = o.y,
           w = o.w,
@@ -1752,7 +1753,6 @@ function world_load(world_deets)
     zones = new_world_zones,
     background = world_deets.background,
     fog = world_deets.fog,
-    players = {},
     objects = new_world_objs,
     entities = new_world_entities,
     bullets = {},
@@ -1883,6 +1883,7 @@ function game_update()
         create_ability_particle(aname,x,y,h)
       end
     end
+
 
     world_update()
 
