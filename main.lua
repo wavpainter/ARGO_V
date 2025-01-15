@@ -323,24 +323,40 @@ abilities["reflect"].draw = function(world,entity,active_abil)
   love.graphics.circle("fill",pos.x,pos.y,active_abil.rad)
 end
 
-function beam_get_endpoint(world,entity,active_abil)
+function beam_get_endpoint(world,entity,active_abil,smooth)
   local target = world.entities[active_abil.target]
   
   if target == nil or not target.alive then return nil end
 
-  local dx = entity.x - target.x
-  local dy = entity.y - target.y
+  local ep = nil
+  local tp = nil
+  if smooth then
+    ep = get_entity_smooth_pos(entity)
+    tp = get_entity_smooth_pos(target)
+  else
+    ep = {
+      x = entity.x,
+      y = entity.y
+    }
+    tp = {
+      x = target.x,
+      y = target.y
+    }
+  end
+
+  local dx = ep.x - tp.x
+  local dy = ep.y - tp.y
 
   if dx == 0 then
     if dy < 0 then 
       return {
-        x = entity.x,
-        y = entity.y - BIGNUM
+        x = ep.x,
+        y = ep.y - BIGNUM
       }
     else
       return { 
-        x = entity.x,
-        y = entity.y - BIGNUM
+        x = ep.x,
+        y = ep.y - BIGNUM
       }
     end
   else
@@ -348,13 +364,13 @@ function beam_get_endpoint(world,entity,active_abil)
 
     if dx < 0 then
       return { 
-        x = entity.x + BIGNUM,
-        y = entity.y + BIGNUM * m
+        x = ep.x + BIGNUM,
+        y = ep.y + BIGNUM * m
       }
     else
       return {
-        x = entity.x - BIGNUM,
-        y = entity.y - BIGNUM * m
+        x = ep.x - BIGNUM,
+        y = ep.y - BIGNUM * m
       }
     end
   end
@@ -370,7 +386,7 @@ abilities["beam"].update = function(world,entity,active_abil)
   if active_abil.last_dmg == nil or world.tick > (active_abil.last_dmg + math.floor(defs.TPS / abilities["beam"].frequency)) then
     active_abil.last_dmg = world.tick
 
-    local endpoint = beam_get_endpoint(world,entity,active_abil)
+    local endpoint = beam_get_endpoint(world,entity,active_abil,false)
     if endpoint == nil then return false end
 
     for ename,e in pairs(world.entities) do
@@ -384,7 +400,7 @@ abilities["beam"].update = function(world,entity,active_abil)
 end
 
 abilities["beam"].draw = function(world,entity,active_abil)
-  local endpoint = beam_get_endpoint(world,entity,active_abil)
+  local endpoint = beam_get_endpoint(world,entity,active_abil,true)
 
   local sp = get_entity_smooth_pos(entity)
 
@@ -2014,7 +2030,11 @@ end
 ----> Draw
 function game_draw()
   if world ~= nil and world.entities[curr_entity] ~= nil then
-    k = t_accum / defs.TIMESTEP
+    if defs.SMOOTH_RENDER then
+      k = t_accum / defs.TIMESTEP
+    else
+      k = 0
+    end
     world_draw()
     game_draw_particles()
   else
