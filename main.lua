@@ -2032,6 +2032,13 @@ function game_draw()
   if world ~= nil and world.entities[curr_entity] ~= nil then
     if defs.SMOOTH_RENDER then
       k = t_accum / defs.TIMESTEP
+      if k > 1 then 
+        if defs.DRIFT > 0 then
+          k = 1 + defs.DRIFT - defs.DRIFT * math.exp((1 - k) / defs.DRIFT)
+        else
+          k = 1
+        end
+      end
     else
       k = 0
     end
