@@ -302,13 +302,13 @@ end
 
 abilities["summon"].use = function(world,entity,active_abil)
   local summon_name = "summon." .. active_abil.id
-  local entity = entities.create_summon("cat","summon",entity.x,entity.y,defs.PLAYER_L,defs.PLAYER_L,summon_name,entity.name,"summon",entity.enemy)
+  local entity = entities.create_summon("cat","summon",entity.x,entity.y,defs.PLAYER_L,defs.PLAYER_L,summon_name,entity.name,"summon",entity.team)
   world.entities[summon_name] = entity
 end
 
 abilities["knight"].use = function(world,entity,active_abil)
   local summon_name = "knight." .. active_abil.id
-  local entity = entities.create_summon("knight","knight",entity.x,entity.y,defs.PLAYER_L,defs.PLAYER_L,summon_name,entity.name,"knight",entity.enemy)
+  local entity = entities.create_summon("knight","knight",entity.x,entity.y,defs.PLAYER_L,defs.PLAYER_L,summon_name,entity.name,"knight",entity.team)
   world.entities[summon_name] = entity
 end
 
@@ -390,7 +390,7 @@ abilities["beam"].update = function(world,entity,active_abil)
     if endpoint == nil then return false end
 
     for ename,e in pairs(world.entities) do
-      if (e.enemy ~= entity.enemy) and e.alive and e.targetable and line_intersects_rect(entity.x,entity.y,endpoint.x,endpoint.y,e.x-e.w/2,e.y-e.h/2,e.w,e.h) then
+      if (e.team ~= entity.team) and e.alive and e.targetable and line_intersects_rect(entity.x,entity.y,endpoint.x,endpoint.y,e.x-e.w/2,e.y-e.h/2,e.w,e.h) then
         deal_damage(ename,abilities["beam"].damage)
       end
     end
@@ -844,6 +844,9 @@ function command(input_str)
       ents = ents .. ename .. " "
       end
       logging.log_info(ents)
+  elseif command == "join" then
+    join_team(curr_entity,split_command[2])
+    logging.log_info("Joined team: " .. split_command[2])
   else
     logging.log_warning("Unknown command: " .. command)
   end
@@ -1082,6 +1085,7 @@ function get_target_pos(target_name)
 end
 
 function draw_entity(e)
+
   if e.visible and e.alive then
     -- Entity image
     local sp = get_entity_smooth_pos(e)
@@ -1092,7 +1096,9 @@ function draw_entity(e)
     love.graphics.setColor(1,1,1)
     love.graphics.draw(img.img,pos.x-e.w/2,pos.y-e.h/2,0,xscale,yscale)
 
-    if e.targetable and e.enemy then
+    local player = world.entities[curr_entity]
+
+    if e.targetable and player ~= nil and player.team ~= e.team then
       love.graphics.setColor(1,triangle(0.5),0)
       love.graphics.rectangle("line",pos.x-e.w/2-5,pos.y-e.h/2-5,e.w+10,e.h+10)
     end
@@ -1218,20 +1224,20 @@ function world_draw()
         love.graphics.draw(img.img,tp.x - defs.PLAYER_L / 4, tp.y - defs.PLAYER_L / 4,0,xscale,yscale)
       end
     end
-  end
 
-  local bullets = world.bullets
-  for id,bullet in pairs(bullets) do
-    local sp = get_bullet_smooth_pos(bullet,k)
-    local bpos = world_to_screen(sp.x,sp.y)
-    local bullet_target = world.entities[bullet.target]
-    if bullet_target ~= nil then
-      if not bullet_target.enemy then
-        love.graphics.setColor(1,0,0)
-      else
-        love.graphics.setColor(0,0,1)
+    local bullets = world.bullets
+    for id,bullet in pairs(bullets) do
+      local sp = get_bullet_smooth_pos(bullet,k)
+      local bpos = world_to_screen(sp.x,sp.y)
+      local bullet_target = world.entities[bullet.target]
+      if bullet_target ~= nil then
+        if bullet_target.team == player_entity.team then
+          love.graphics.setColor(1,0,0)
+        else
+          love.graphics.setColor(0,0,1)
+        end
+        love.graphics.circle("fill",bpos.x,bpos.y,BULLET_RADIUS)
       end
-      love.graphics.circle("fill",bpos.x,bpos.y,BULLET_RADIUS)
     end
   end
 
@@ -1841,6 +1847,13 @@ function world_join(username)
   world.entities["player."..username] = new_entity
 end
 
+function join_team(username,team)
+  local e = world.entities[username]
+  if e ~= nil then
+    e.team = team
+  end
+end
+
 ----> Set shoot target position
 function set_shoot_target(x,y)
   if world ~= nil and world.entities[curr_entity] ~= nil then
@@ -1849,7 +1862,7 @@ function set_shoot_target(x,y)
     local closest = nil
     local distance = nil
     for ename,e in pairs(world.entities) do
-      if e.targetable and (e.enemy ~= player.enemy) and e.alive then
+      if e.targetable and (e.team ~= player.team) and e.alive then
         local d = utils.euclid(x,y,e.x,e.y)
         if closest == nil or d < distance then
           closest = ename
@@ -2134,6 +2147,10 @@ function register_key_handlers()
     end 
   end
   game_keyhandlers["tab"] = function(key,pressed) if pressed then shoot_nearest() end end
+  game_keyhandlers["up"] = function(key,pressed) update_movement() end
+  game_keyhandlers["left"] = function(key,pressed) update_movement() end
+  game_keyhandlers["down"] = function(key,pressed) update_movement() end
+  game_keyhandlers["right"] = function(key,pressed) update_movement() end
 end
 
 ----> Key handler

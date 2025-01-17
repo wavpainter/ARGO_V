@@ -31,7 +31,7 @@ local Entities = {
       max_hp = 200,
       move_speed = 0.75,
       abilities = {
-        ["summon"] = {
+        ["beam"] = {
           locked = true,
           times_used = 0,
           slot = 2
@@ -110,22 +110,23 @@ function entities.create_player(sprite,x,y,w,h,abils,name)
   local entity = entities.create("player",sprite,true,nil,x,y,w,h,abils,name)
   entity.player = true
   entity.ephemeral = true
+  entity.team = "ally"
   return entity
 end
 
-function entities.create_summon(type,sprite,x,y,w,h,name,parent,parent_ability,enemy)
+function entities.create_summon(type,sprite,x,y,w,h,name,parent,parent_ability,team)
   local entity = entities.create(type,sprite,true,nil,x,y,w,h,Entities[type].abilities,name)
   entity.parent = parent
   entity.parent_ability = parent_ability
   entity.summon = true
   entity.ephemeral = true
-  entity.enemy = enemy
+  entity.team = team
   return entity
 end
 
 function entities.create_enemy(type,sprite,visible,zone,x,y,w,h,name)
   local entity = entities.create(type,sprite,visible,zone,x,y,w,h,Entities[type].abilities,name)
-  entity.enemy = true
+  entity.team = "enemy"
   return entity
 end
 
@@ -181,7 +182,7 @@ function entities.create(type,sprite,visible,zone,x,y,w,h,abils,name)
       ephemeral = false,
       -- Identity
       player = false,
-      enemy = false,
+      team = nil,
       summon = false,
       -- Substructures
       parent = nil,
@@ -355,7 +356,7 @@ function entities.update(world,entity)
       local nearest_entity = nil
       local nearest_dist = nil
       for ename,e in pairs(world.entities) do
-        if e.targetable and e.alive and (e.enemy ~= entity.enemy) then
+        if e.targetable and e.alive and (e.team ~= entity.team) then
           local d = utils.euclid(e.x,e.y,entity.x,entity.y)
           if nearest_entity == nil or d < nearest_dist then
             nearest_entity = e
