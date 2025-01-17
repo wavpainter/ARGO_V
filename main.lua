@@ -1849,7 +1849,7 @@ end
 
 function join_team(username,team)
   local e = world.entities[username]
-  if e ~= nil then
+  if e ~= nil and team ~= nil then
     e.team = team
   end
 end
