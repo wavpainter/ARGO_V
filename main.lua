@@ -872,6 +872,14 @@ function debug_draw()
     love.graphics.print("World tick: " .. tostring(world.tick),10,40)
   end
 
+  -- Player move dir
+  if world then
+    local player = world.entities[curr_entity]
+    if player ~= nil then
+      love.graphics.print("Player move dir: " .. tostring(player.move_dir),10,70)
+    end
+  end
+
   -- Logs
   local y = h - 3 * lh
   local n = 20
@@ -2120,6 +2128,42 @@ function action()
         interact(curr_entity,parts[2],parts[3])
       end
     end
+  end
+end
+
+function update_movement()
+  local player = world.entities[curr_entity]
+
+  if player == nil then return end
+
+  local up = love.keyboard.isDown('up')
+  local left = love.keyboard.isDown('left')
+  local down = love.keyboard.isDown('down')
+  local right = love.keyboard.isDown('right')
+
+  if up or left or down or right then
+    local dx = 0
+    if left and right then
+      dx = 0
+    elseif left then
+      dx = -1
+    elseif right then
+      dx = 1
+    end
+
+    local dy = 0
+    if up and down then
+      dy = 0
+    elseif up then
+      dy = -1
+    elseif down then
+      dy = 1
+    end
+
+    player.move_target = nil
+    player.move_dir = math.atan2(dy,dx)
+  else
+    player.move_dir = nil
   end
 end
 

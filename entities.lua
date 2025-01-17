@@ -180,6 +180,8 @@ function entities.create(type,sprite,visible,zone,x,y,w,h,abils,name)
       ability_channeling = nil,
       shooting = false,
       ephemeral = false,
+      move_target = nil,
+      move_dir = nil,
       -- Identity
       player = false,
       team = nil,
@@ -572,8 +574,14 @@ function entities.update(world,entity)
   end
 
   -- Entity move
+  local new_pos = nil
   if entity.move_target ~= nil then
-    local new_pos = utils.new_pos(entity.x,entity.y,entity.move_target.x,entity.move_target.y,defs.MOVE_SPEED * entity.move_speed)
+    new_pos = utils.new_pos(entity.x,entity.y,entity.move_target.x,entity.move_target.y,defs.MOVE_SPEED * entity.move_speed)
+  elseif entity.move_dir ~= nil then
+    new_pos = utils.new_pos(entity.x,entity.y,entity.x + 100000 * math.cos(entity.move_dir),entity.y + 100000 * math.sin(entity.move_dir),defs.MOVE_SPEED * entity.move_speed)
+  end
+  
+  if new_pos ~= nil then
     adjust_pos_for_collisions(new_pos,defs.PLAYER_L,defs.PLAYER_L)
     
     entity.x = new_pos.x
